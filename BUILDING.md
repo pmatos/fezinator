@@ -47,51 +47,139 @@ cargo test --test integration_test
 cargo test -- --nocapture
 ```
 
-## Linting and Formatting
+## Quality Assurance Tools
 
-### Check Code Format
+### Static Analysis Tools
+
+Fezinator uses several complementary tools for code quality:
+
+- **cargo-audit**: Security vulnerability scanner
+- **cargo-machete**: Unused dependency detector  
+- **cargo-outdated**: Outdated dependency checker
+- **cargo-geiger**: Unsafe code detector
+
+#### Install QA Tools
+```bash
+# Install all tools at once
+make install-tools
+
+# Or install individually
+cargo install cargo-audit cargo-machete cargo-outdated cargo-geiger
+```
+
+### Formatting and Linting
+
+#### Check Code Format
 ```bash
 cargo fmt --check
 ```
 
-### Format Code
+#### Format Code
 ```bash
 cargo fmt
 ```
 
-### Run Clippy Linter
+#### Run Clippy Linter
 ```bash
 cargo clippy -- -D warnings
 ```
 
-### Run All Checks
+### Security and Dependencies
+
+#### Security Audit
 ```bash
-cargo fmt --check && cargo clippy -- -D warnings && cargo test
+cargo audit
+```
+
+#### Check for Unused Dependencies
+```bash
+cargo machete
+```
+
+#### Check for Outdated Dependencies
+```bash
+cargo outdated --root-deps-only
+```
+
+#### Check for Unsafe Code
+```bash
+cargo geiger --forbid-only
+```
+
+### Comprehensive Quality Checks
+
+#### Using Make (Recommended)
+```bash
+# Run all quality checks
+make check
+
+# Run quick checks (no security scans)
+make quick
+
+# Run pre-commit checks
+make pre-commit
+
+# Run security checks only
+make security
+
+# Run dependency checks only
+make deps
+```
+
+#### Using QA Script
+```bash
+# Run all checks
+./scripts/qa.sh
+
+# Run quick checks only
+./scripts/qa.sh --quick
+
+# Run security checks only
+./scripts/qa.sh --security
+
+# Run dependency checks only
+./scripts/qa.sh --deps
+```
+
+### Pre-commit Hooks
+
+Install git hooks to run checks automatically before commits:
+
+```bash
+./scripts/install-hooks.sh
+```
+
+The pre-commit hook runs:
+- Code formatting (with auto-fix)
+- Clippy lints
+- Tests
+- Build
+- Security audit
+
+To bypass for a specific commit:
+```bash
+git commit --no-verify
 ```
 
 ## Development Workflow
 
-Before committing any changes, ensure:
+Before committing any changes, run:
 
-1. Code is properly formatted:
-   ```bash
-   cargo fmt
-   ```
+```bash
+# Recommended: use make for comprehensive checks
+make pre-commit
 
-2. No linting warnings:
-   ```bash
-   cargo clippy -- -D warnings
-   ```
+# Or use the QA script
+./scripts/qa.sh --quick
 
-3. All tests pass:
-   ```bash
-   cargo test
-   ```
+# Or run individual commands
+cargo fmt
+cargo clippy -- -D warnings
+cargo test
+cargo build --release
+```
 
-4. Release build succeeds:
-   ```bash
-   cargo build --release
-   ```
+The pre-commit hook will automatically run these checks if installed.
 
 ## Common Issues
 
