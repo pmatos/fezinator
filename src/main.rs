@@ -7,6 +7,7 @@ mod error;
 mod extractor;
 
 use cli::extract::ExtractCommand;
+use cli::list::ListCommand;
 
 #[derive(Parser)]
 #[command(name = "fezinator")]
@@ -19,14 +20,17 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     Extract(ExtractCommand),
+    List(ListCommand),
 }
 
 fn main() -> Result<()> {
-    env_logger::init();
+    // Initialize logging with INFO level by default
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
     let cli = Cli::parse();
 
     match cli.command {
         Commands::Extract(cmd) => cmd.execute(),
+        Commands::List(cmd) => cmd.execute(),
     }
 }

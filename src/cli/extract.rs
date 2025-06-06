@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::Args;
-use log::{debug, info};
+use log::debug;
 use std::path::PathBuf;
 
 use crate::db::Database;
@@ -14,6 +14,9 @@ pub struct ExtractCommand {
     #[arg(short, long, help = "Enable verbose logging")]
     verbose: bool,
 
+    #[arg(short, long, help = "Suppress all output")]
+    quiet: bool,
+
     #[arg(
         short,
         long,
@@ -25,34 +28,59 @@ pub struct ExtractCommand {
 
 impl ExtractCommand {
     pub fn execute(self) -> Result<()> {
+        if !self.quiet {
+            println!("Extracting from binary: {}", self.binary.display());
+        }
+
         if self.verbose {
-            info!("Extracting from binary: {:?}", self.binary);
+            debug!("Verbose mode enabled");
         }
 
         let mut db = Database::new(&self.database)?;
         db.init()?;
 
-        let extractor = Extractor::new(self.binary)?;
+        if !self.quiet {
+            println!("Database initialized: {}", self.database.display());
+        }
+
+        let extractor = Extractor::new(self.binary.clone())?;
         let binary_info = extractor.get_binary_info()?;
 
+        if !self.quiet {
+            println!(
+                "Binary info: {} {} (SHA256: {}...)",
+                binary_info.format,
+                binary_info.architecture,
+                &binary_info.hash[..8]
+            );
+        }
+
         if self.verbose {
-            info!("Binary info: {:?}", binary_info);
+            debug!("Full binary info: {:?}", binary_info);
         }
 
         let (start_addr, end_addr, assembly_block) = extractor.extract_random_block()?;
 
-        if self.verbose {
-            info!(
-                "Extracted block from 0x{:x} to 0x{:x}",
-                start_addr, end_addr
+        if !self.quiet {
+            println!(
+                "Extracted block: 0x{:08x} - 0x{:08x} ({} bytes)",
+                start_addr,
+                end_addr,
+                assembly_block.len()
             );
-            debug!("Assembly block size: {} bytes", assembly_block.len());
+        }
+
+        if self.verbose {
+            debug!(
+                "Assembly block first 16 bytes: {:02x?}",
+                &assembly_block[..16.min(assembly_block.len())]
+            );
         }
 
         db.store_extraction(&binary_info, start_addr, end_addr, &assembly_block)?;
 
-        if self.verbose {
-            info!("Extraction stored in database");
+        if !self.quiet {
+            println!("✓ Extraction stored in database successfully");
         }
 
         Ok(())

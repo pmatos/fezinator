@@ -212,6 +212,7 @@ fn test_quiet_mode() {
             test_binary.to_str().unwrap(),
             "--database",
             db_path.to_str().unwrap(),
+            "--quiet",
         ])
         .output()
         .expect("Failed to run fezinator");

@@ -16,6 +16,18 @@ pub struct BinaryInfo {
     pub endianness: String,
 }
 
+#[derive(Debug)]
+pub struct ExtractionInfo {
+    pub binary_path: String,
+    pub binary_hash: String,
+    pub binary_format: String,
+    pub binary_architecture: String,
+    pub start_address: u64,
+    pub end_address: u64,
+    pub assembly_block: Vec<u8>,
+    pub created_at: String,
+}
+
 pub struct Database {
     conn: Connection,
 }
@@ -100,5 +112,32 @@ impl Database {
 
         tx.commit()?;
         Ok(())
+    }
+
+    pub fn list_extractions(&self) -> Result<Vec<ExtractionInfo>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT b.path, b.hash, b.format, b.architecture, 
+                    e.start_address, e.end_address, e.assembly_block, e.created_at
+             FROM extractions e
+             JOIN binaries b ON e.binary_id = b.id
+             ORDER BY e.created_at DESC",
+        )?;
+
+        let extractions = stmt
+            .query_map([], |row| {
+                Ok(ExtractionInfo {
+                    binary_path: row.get(0)?,
+                    binary_hash: row.get(1)?,
+                    binary_format: row.get(2)?,
+                    binary_architecture: row.get(3)?,
+                    start_address: row.get(4)?,
+                    end_address: row.get(5)?,
+                    assembly_block: row.get(6)?,
+                    created_at: row.get(7)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(extractions)
     }
 }
