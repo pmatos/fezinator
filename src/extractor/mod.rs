@@ -160,15 +160,15 @@ impl Extractor {
         let section_addr = text_section.address();
         let section_size = section_data.len();
 
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         let max_block_size = std::cmp::min(1024, section_size);
         let min_block_size = std::cmp::min(16, section_size);
 
-        let block_size = rng.gen_range(min_block_size..=max_block_size);
+        let block_size = rng.random_range(min_block_size..=max_block_size);
         let max_start = section_size.saturating_sub(block_size);
         let start_offset = if max_start > 0 {
-            rng.gen_range(0..=max_start)
+            rng.random_range(0..=max_start)
         } else {
             0
         };
