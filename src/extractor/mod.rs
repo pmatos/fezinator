@@ -77,10 +77,8 @@ impl Extractor {
             match file.architecture() {
                 Architecture::X86_64 => "x86_64",
                 Architecture::I386 => "i386",
-                Architecture::Aarch64 => "aarch64",
-                Architecture::Arm => "arm",
                 _ => return Err(FezinatorError::InvalidBinary(
-                    "Unsupported architecture. Only x86, x86_64, ARM, and AArch64 are supported."
+                    "Unsupported architecture. Only x86 and x86_64 architectures are supported."
                         .into(),
                 )
                 .into()),

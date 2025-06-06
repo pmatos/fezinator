@@ -48,6 +48,27 @@ impl ListCommand {
             );
             println!("  Size: {} bytes", block.assembly_block.len());
             println!("  Extracted at: {}", block.created_at);
+            println!("  Status: {}", block.analysis_status);
+
+            if block.analysis_status == "analyzed" {
+                if let Some(results) = &block.analysis_results {
+                    if let Ok(summary) = serde_json::from_str::<serde_json::Value>(results) {
+                        if let Some(instructions) = summary.get("instructions") {
+                            println!("  Instructions: {}", instructions);
+                        }
+                        if let Some(live_in) = summary.get("live_in").and_then(|v| v.as_str()) {
+                            if !live_in.is_empty() {
+                                println!("  Live-in: {}", live_in);
+                            }
+                        }
+                        if let Some(live_out) = summary.get("live_out").and_then(|v| v.as_str()) {
+                            if !live_out.is_empty() {
+                                println!("  Live-out: {}", live_out);
+                            }
+                        }
+                    }
+                }
+            }
 
             if self.verbose && !block.assembly_block.is_empty() {
                 let preview_len = 32.min(block.assembly_block.len());

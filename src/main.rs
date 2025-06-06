@@ -1,11 +1,13 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
+mod analyzer;
 mod cli;
 mod db;
 mod error;
 mod extractor;
 
+use cli::analyze::AnalyzeCommand;
 use cli::extract::ExtractCommand;
 use cli::list::ListCommand;
 use cli::remove::RemoveCommand;
@@ -23,6 +25,7 @@ enum Commands {
     Extract(ExtractCommand),
     List(ListCommand),
     Remove(RemoveCommand),
+    Analyze(AnalyzeCommand),
 }
 
 fn main() -> Result<()> {
@@ -35,5 +38,6 @@ fn main() -> Result<()> {
         Commands::Extract(cmd) => cmd.execute(),
         Commands::List(cmd) => cmd.execute(),
         Commands::Remove(cmd) => cmd.execute(),
+        Commands::Analyze(cmd) => cmd.execute(),
     }
 }

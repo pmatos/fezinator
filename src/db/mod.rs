@@ -3,6 +3,8 @@ use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+use crate::analyzer::BlockAnalysis;
+
 #[cfg(test)]
 mod tests;
 
@@ -26,6 +28,8 @@ pub struct ExtractionInfo {
     pub end_address: u64,
     pub assembly_block: Vec<u8>,
     pub created_at: String,
+    pub analysis_status: String,
+    pub analysis_results: Option<String>,
 }
 
 pub struct Database {
@@ -62,6 +66,21 @@ impl Database {
                 assembly_block BLOB NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (binary_id) REFERENCES binaries(id)
+            )",
+            [],
+        )?;
+
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS analyses (
+                id INTEGER PRIMARY KEY,
+                extraction_id INTEGER NOT NULL UNIQUE,
+                instructions_count INTEGER NOT NULL,
+                live_in_registers TEXT NOT NULL,
+                live_out_registers TEXT NOT NULL,
+                exit_points TEXT NOT NULL,
+                memory_accesses TEXT NOT NULL,
+                analyzed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (extraction_id) REFERENCES extractions(id)
             )",
             [],
         )?;
@@ -117,9 +136,24 @@ impl Database {
     pub fn list_extractions(&self) -> Result<Vec<ExtractionInfo>> {
         let mut stmt = self.conn.prepare(
             "SELECT b.path, b.hash, b.format, b.architecture, 
-                    e.start_address, e.end_address, e.assembly_block, e.created_at
+                    e.start_address, e.end_address, e.assembly_block, e.created_at,
+                    e.id,
+                    CASE 
+                        WHEN a.id IS NOT NULL THEN 'analyzed'
+                        ELSE 'not analyzed'
+                    END as analysis_status,
+                    CASE 
+                        WHEN a.id IS NOT NULL THEN 
+                            json_object(
+                                'instructions', a.instructions_count,
+                                'live_in', a.live_in_registers,
+                                'live_out', a.live_out_registers
+                            )
+                        ELSE NULL
+                    END as analysis_summary
              FROM extractions e
              JOIN binaries b ON e.binary_id = b.id
+             LEFT JOIN analyses a ON e.id = a.extraction_id
              ORDER BY e.created_at DESC",
         )?;
 
@@ -134,6 +168,8 @@ impl Database {
                     end_address: row.get(5)?,
                     assembly_block: row.get(6)?,
                     created_at: row.get(7)?,
+                    analysis_status: row.get(9)?,
+                    analysis_results: row.get(10)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -198,5 +234,57 @@ impl Database {
 
         tx.commit()?;
         Ok(count)
+    }
+
+    pub fn store_analysis(
+        &mut self,
+        start_addr: u64,
+        end_addr: u64,
+        binary_hash: &str,
+        analysis: &BlockAnalysis,
+    ) -> Result<()> {
+        let tx = self.conn.transaction()?;
+
+        // Find the extraction_id
+        let extraction_id: i64 = tx.query_row(
+            "SELECT e.id FROM extractions e
+             JOIN binaries b ON e.binary_id = b.id
+             WHERE b.hash = ?1 AND e.start_address = ?2 AND e.end_address = ?3",
+            params![binary_hash, start_addr, end_addr],
+            |row| row.get(0),
+        )?;
+
+        // Serialize analysis data
+        let live_in_regs: Vec<&str> = analysis
+            .live_in_registers
+            .iter()
+            .map(|s| s.as_str())
+            .collect();
+        let live_out_regs: Vec<&str> = analysis
+            .live_out_registers
+            .iter()
+            .map(|s| s.as_str())
+            .collect();
+        let exit_points_json = serde_json::to_string(&analysis.exit_points)?;
+        let memory_accesses_json = serde_json::to_string(&analysis.memory_accesses)?;
+
+        // Insert or update analysis
+        tx.execute(
+            "INSERT OR REPLACE INTO analyses 
+             (extraction_id, instructions_count, live_in_registers, live_out_registers, 
+              exit_points, memory_accesses)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                extraction_id,
+                analysis.instructions_count,
+                live_in_regs.join(","),
+                live_out_regs.join(","),
+                exit_points_json,
+                memory_accesses_json,
+            ],
+        )?;
+
+        tx.commit()?;
+        Ok(())
     }
 }
