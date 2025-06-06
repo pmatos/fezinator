@@ -1,0 +1,2 @@
+- Do not mention Claude as a co-author or generated of any code or documentation.
+- Run build, tests and lint every time, ensuring they are successful before finishing a feature and before committing.
