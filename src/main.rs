@@ -8,6 +8,7 @@ mod extractor;
 
 use cli::extract::ExtractCommand;
 use cli::list::ListCommand;
+use cli::remove::RemoveCommand;
 
 #[derive(Parser)]
 #[command(name = "fezinator")]
@@ -21,6 +22,7 @@ struct Cli {
 enum Commands {
     Extract(ExtractCommand),
     List(ListCommand),
+    Remove(RemoveCommand),
 }
 
 fn main() -> Result<()> {
@@ -32,5 +34,6 @@ fn main() -> Result<()> {
     match cli.command {
         Commands::Extract(cmd) => cmd.execute(),
         Commands::List(cmd) => cmd.execute(),
+        Commands::Remove(cmd) => cmd.execute(),
     }
 }

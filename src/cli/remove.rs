@@ -1,0 +1,76 @@
+use anyhow::{anyhow, Result};
+use clap::Args;
+use std::path::PathBuf;
+
+use crate::db::Database;
+
+#[derive(Args)]
+pub struct RemoveCommand {
+    #[arg(
+        short,
+        long,
+        default_value = "fezinator.db",
+        help = "SQLite database path"
+    )]
+    database: PathBuf,
+
+    #[arg(short, long, help = "Remove all blocks from database")]
+    all: bool,
+
+    #[arg(
+        value_name = "BLOCK_NUMBER",
+        help = "Block number to remove (as shown by list command)"
+    )]
+    block_number: Option<usize>,
+}
+
+impl RemoveCommand {
+    pub fn execute(self) -> Result<()> {
+        if !self.all && self.block_number.is_none() {
+            return Err(anyhow!(
+                "Must specify either --all or a block number to remove"
+            ));
+        }
+
+        if self.all && self.block_number.is_some() {
+            return Err(anyhow!("Cannot specify both --all and a block number"));
+        }
+
+        let mut db = Database::new(&self.database)?;
+
+        if self.all {
+            println!("Removing all blocks from database...");
+            let count = db.remove_all_extractions()?;
+            println!("✓ Removed {} blocks from database", count);
+        } else if let Some(block_num) = self.block_number {
+            // Get list of extractions to find the one to delete
+            let extractions = db.list_extractions()?;
+
+            if block_num == 0 || block_num > extractions.len() {
+                return Err(anyhow!(
+                    "Invalid block number. Valid range: 1-{}",
+                    extractions.len()
+                ));
+            }
+
+            // Block numbers are 1-indexed in the UI, but 0-indexed in the vector
+            let extraction = &extractions[block_num - 1];
+
+            println!("Removing block #{} from database...", block_num);
+            println!("  Binary: {}", extraction.binary_path);
+            println!(
+                "  Address range: 0x{:08x} - 0x{:08x}",
+                extraction.start_address, extraction.end_address
+            );
+
+            db.remove_extraction(
+                extraction.start_address,
+                extraction.end_address,
+                &extraction.binary_hash,
+            )?;
+            println!("✓ Block removed successfully");
+        }
+
+        Ok(())
+    }
+}

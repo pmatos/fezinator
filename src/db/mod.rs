@@ -140,4 +140,63 @@ impl Database {
 
         Ok(extractions)
     }
+
+    pub fn remove_extraction(
+        &mut self,
+        start_addr: u64,
+        end_addr: u64,
+        binary_hash: &str,
+    ) -> Result<()> {
+        let tx = self.conn.transaction()?;
+
+        // Find the binary_id for the given hash
+        let binary_id: i64 = tx.query_row(
+            "SELECT id FROM binaries WHERE hash = ?1",
+            params![binary_hash],
+            |row| row.get(0),
+        )?;
+
+        // Delete the extraction
+        let affected = tx.execute(
+            "DELETE FROM extractions 
+             WHERE binary_id = ?1 AND start_address = ?2 AND end_address = ?3",
+            params![binary_id, start_addr, end_addr],
+        )?;
+
+        if affected == 0 {
+            return Err(anyhow::anyhow!("No matching extraction found"));
+        }
+
+        // Check if this was the last extraction for this binary
+        let remaining_count: i64 = tx.query_row(
+            "SELECT COUNT(*) FROM extractions WHERE binary_id = ?1",
+            params![binary_id],
+            |row| row.get(0),
+        )?;
+
+        // If no more extractions for this binary, remove the binary entry too
+        if remaining_count == 0 {
+            tx.execute("DELETE FROM binaries WHERE id = ?1", params![binary_id])?;
+        }
+
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn remove_all_extractions(&mut self) -> Result<usize> {
+        let tx = self.conn.transaction()?;
+
+        // Count extractions before deletion
+        let count: usize =
+            tx.query_row("SELECT COUNT(*) FROM extractions", [], |row| row.get(0))?;
+
+        // Delete all extractions
+        tx.execute("DELETE FROM extractions", [])?;
+
+        // Delete all binaries (since we're removing all extractions)
+        tx.execute("DELETE FROM binaries", [])?;
+
+        tx.commit()?;
+        Ok(count)
+    }
 }
