@@ -8,7 +8,7 @@ use crate::extractor::Extractor;
 
 #[derive(Args)]
 pub struct ExtractCommand {
-    #[arg(help = "Path to the x86 ELF binary")]
+    #[arg(help = "Path to the binary file (ELF or PE format)")]
     binary: PathBuf,
 
     #[arg(short, long, help = "Enable verbose logging")]

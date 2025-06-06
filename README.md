@@ -1,16 +1,18 @@
 # Fezinator
 
-A framework for extracting and analyzing assembly code blocks from x86-64 ELF binaries.
+A framework for extracting and analyzing assembly code blocks from ELF and PE binaries.
 
 ## Overview
 
-Fezinator is a Rust-based command-line tool that provides a git-like interface for extracting random assembly code blocks from x86-64 ELF binaries. It stores extracted data in an SQLite database for analysis and research purposes.
+Fezinator is a Rust-based command-line tool that provides a git-like interface for extracting random assembly code blocks from ELF (Linux) and PE (Windows) binaries. It stores extracted data in an SQLite database for analysis and research purposes.
 
 ## Features
 
-- **Binary Analysis**: Parses x86-64 ELF binaries and extracts metadata
-- **Random Extraction**: Selects random code blocks from the `.text` section
+- **Multi-Format Support**: Supports both ELF (Linux) and PE (Windows) binary formats
+- **Architecture Support**: Works with x86, x86_64, ARM, and AArch64 architectures
+- **Random Extraction**: Selects random code blocks from executable sections
 - **Smart Storage**: SQLite database with deduplication and metadata tracking  
+- **Format Detection**: Automatically detects binary format and rejects unsupported types
 - **Git-like CLI**: Familiar command structure with subcommands
 - **Comprehensive Testing**: Unit and integration tests ensure reliability
 - **Quality Assurance**: Built-in security scanning and code quality tools
@@ -44,7 +46,7 @@ The binary will be available at `target/release/fezinator`.
 
 ### Extract Command
 
-The `extract` command analyzes an x86-64 ELF binary and extracts a random assembly code block:
+The `extract` command analyzes an ELF or PE binary and extracts a random assembly code block:
 
 ```bash
 fezinator extract <binary_path> [OPTIONS]
@@ -62,7 +64,9 @@ For each extraction, Fezinator stores:
 **Binary Information:**
 - File path and size
 - SHA256 hash for deduplication
-- Architecture and endianness
+- Binary format (ELF or PE)
+- Architecture (x86, x86_64, ARM, AArch64)
+- Endianness (little or big)
 - Creation timestamp
 
 **Extraction Data:**
@@ -80,6 +84,7 @@ CREATE TABLE binaries (
     path TEXT NOT NULL,
     size INTEGER NOT NULL,
     hash TEXT NOT NULL UNIQUE,
+    format TEXT NOT NULL,
     architecture TEXT NOT NULL,
     endianness TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -104,7 +109,7 @@ CREATE TABLE extractions (
 ```bash
 $ fezinator extract /bin/ls --verbose
 [INFO] Extracting from binary: "/bin/ls"
-[INFO] Binary info: BinaryInfo { path: "/bin/ls", size: 142312, hash: "a1b2c3...", architecture: "x86_64", endianness: "little" }
+[INFO] Binary info: BinaryInfo { path: "/bin/ls", size: 142312, hash: "a1b2c3...", format: "ELF", architecture: "x86_64", endianness: "little" }
 [INFO] Extracted block from 0x4015a0 to 0x4015c8
 [INFO] Extraction stored in database
 ```
@@ -130,10 +135,30 @@ fezinator extract /bin/ls
 echo $?  # 0 if successful
 ```
 
+### Format Detection
+
+```bash
+# Automatically detects and supports ELF files
+$ fezinator extract /bin/ls
+# Success: ELF format detected and processed
+
+# Automatically detects and supports PE files  
+$ fezinator extract program.exe
+# Success: PE format detected and processed
+
+# Rejects unsupported formats with clear error messages
+$ fezinator extract script.sh
+# Error: Unknown or unsupported binary format. Only ELF and PE formats are supported.
+
+$ fezinator extract archive.zip
+# Error: Binary parsing error: ...
+```
+
 ## Requirements
 
 - Rust 1.70 or later
-- x86-64 architecture (for target binaries)
+- Supported binary formats: ELF (Linux), PE (Windows)
+- Supported architectures: x86, x86_64, ARM, AArch64
 - GCC (for compiling test binaries during development)
 
 ## Building and Development

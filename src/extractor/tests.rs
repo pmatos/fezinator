@@ -48,6 +48,7 @@ mod tests {
         let extractor = Extractor::new(binary_file.path().to_path_buf()).unwrap();
         let info = extractor.get_binary_info().unwrap();
 
+        assert_eq!(info.format, "ELF");
         assert_eq!(info.architecture, "x86_64");
         assert_eq!(info.endianness, "little");
         assert!(info.size > 0);
@@ -87,5 +88,43 @@ mod tests {
             .collect::<std::collections::HashSet<_>>()
             .len();
         assert!(unique_count >= 1, "Should produce at least one extraction");
+    }
+
+    #[test]
+    fn test_format_detection_elf() {
+        let binary_file = create_test_binary();
+        let extractor = Extractor::new(binary_file.path().to_path_buf()).unwrap();
+
+        let format = extractor.detect_format().unwrap();
+        assert!(matches!(format, crate::extractor::SupportedFormat::Elf));
+    }
+
+    #[test]
+    fn test_unsupported_format_error() {
+        let temp_file = NamedTempFile::new().unwrap();
+
+        // Create a file with invalid binary format
+        fs::write(temp_file.path(), b"This is not a valid binary format").unwrap();
+
+        let extractor = Extractor::new(temp_file.path().to_path_buf()).unwrap();
+        let result = extractor.get_binary_info();
+
+        assert!(result.is_err());
+        let error_msg = result.unwrap_err().to_string();
+        assert!(
+            error_msg.contains("Binary parsing error")
+                || error_msg.contains("Unknown or unsupported")
+        );
+    }
+
+    #[test]
+    fn test_architecture_detection() {
+        let binary_file = create_test_binary();
+        let extractor = Extractor::new(binary_file.path().to_path_buf()).unwrap();
+        let info = extractor.get_binary_info().unwrap();
+
+        // Should detect x86_64 architecture for GCC-compiled binary
+        assert!(matches!(info.architecture.as_str(), "x86_64" | "i386"));
+        assert_eq!(info.endianness, "little");
     }
 }

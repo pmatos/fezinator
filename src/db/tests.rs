@@ -37,6 +37,7 @@ mod tests {
             path: "/test/binary".to_string(),
             size: 1024,
             hash: "abcdef123456".to_string(),
+            format: "ELF".to_string(),
             architecture: "x86_64".to_string(),
             endianness: "little".to_string(),
         };
@@ -62,6 +63,7 @@ mod tests {
             path: "/test/binary".to_string(),
             size: 1024,
             hash: "unique_hash_123".to_string(),
+            format: "ELF".to_string(),
             architecture: "x86_64".to_string(),
             endianness: "little".to_string(),
         };

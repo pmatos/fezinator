@@ -10,7 +10,7 @@ use cli::extract::ExtractCommand;
 
 #[derive(Parser)]
 #[command(name = "fezinator")]
-#[command(about = "A framework for extracting and analyzing assembly code blocks", long_about = None)]
+#[command(about = "A framework for extracting and analyzing assembly code blocks from ELF and PE binaries", long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,

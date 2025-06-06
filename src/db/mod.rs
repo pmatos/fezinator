@@ -11,6 +11,7 @@ pub struct BinaryInfo {
     pub path: String,
     pub size: u64,
     pub hash: String,
+    pub format: String,
     pub architecture: String,
     pub endianness: String,
 }
@@ -32,6 +33,7 @@ impl Database {
                 path TEXT NOT NULL,
                 size INTEGER NOT NULL,
                 hash TEXT NOT NULL UNIQUE,
+                format TEXT NOT NULL,
                 architecture TEXT NOT NULL,
                 endianness TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -74,12 +76,13 @@ impl Database {
                 Some(id) => id,
                 None => {
                     tx.execute(
-                        "INSERT INTO binaries (path, size, hash, architecture, endianness)
-                         VALUES (?1, ?2, ?3, ?4, ?5)",
+                        "INSERT INTO binaries (path, size, hash, format, architecture, endianness)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                         params![
                             binary_info.path,
                             binary_info.size,
                             binary_info.hash,
+                            binary_info.format,
                             binary_info.architecture,
                             binary_info.endianness,
                         ],

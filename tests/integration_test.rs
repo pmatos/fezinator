@@ -133,9 +133,9 @@ fn test_binary_info_storage() {
 
     let conn = Connection::open(&db_path).unwrap();
 
-    let (path, size, hash, arch, endian): (String, i64, String, String, String) = conn
-        .query_row(
-            "SELECT path, size, hash, architecture, endianness FROM binaries",
+    let (path, size, hash, format, arch, endian): (String, i64, String, String, String, String) =
+        conn.query_row(
+            "SELECT path, size, hash, format, architecture, endianness FROM binaries",
             [],
             |row| {
                 Ok((
@@ -144,6 +144,7 @@ fn test_binary_info_storage() {
                     row.get(2)?,
                     row.get(3)?,
                     row.get(4)?,
+                    row.get(5)?,
                 ))
             },
         )
@@ -152,6 +153,7 @@ fn test_binary_info_storage() {
     assert!(path.contains("test_binary"));
     assert!(size > 0, "Binary size should be positive");
     assert_eq!(hash.len(), 64, "SHA256 hash should be 64 characters");
+    assert_eq!(format, "ELF");
     assert_eq!(arch, "x86_64");
     assert_eq!(endian, "little");
 
