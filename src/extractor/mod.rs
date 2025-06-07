@@ -254,4 +254,111 @@ impl Extractor {
 
         Ok((start_addr, end_addr, assembly_block))
     }
+
+    pub fn extract_range(&self, start_addr: u64, end_addr: u64) -> Result<(u64, u64, Vec<u8>)> {
+        if start_addr >= end_addr {
+            return Err(FezinatorError::InvalidBinary(
+                "Start address must be less than end address".into(),
+            )
+            .into());
+        }
+
+        let file = object::File::parse(&*self.binary_data)
+            .map_err(|e| FezinatorError::BinaryParsing(e.to_string()))?;
+
+        let text_section = self.find_executable_section(&file)?;
+
+        let section_data = text_section
+            .data()
+            .map_err(|e| FezinatorError::BinaryParsing(e.to_string()))?;
+
+        if section_data.is_empty() {
+            return Err(FezinatorError::InvalidBinary("Empty executable section".into()).into());
+        }
+
+        let section_addr = text_section.address();
+        let section_end = section_addr + section_data.len() as u64;
+
+        // Validate that addresses are within the section
+        if start_addr < section_addr || end_addr > section_end {
+            return Err(FezinatorError::InvalidBinary(format!(
+                "Address range 0x{:x}-0x{:x} is outside executable section (0x{:x}-0x{:x})",
+                start_addr, end_addr, section_addr, section_end
+            ))
+            .into());
+        }
+
+        let cs = self.create_capstone()?;
+
+        // Disassemble the entire section to verify instruction alignment
+        let insns = cs.disasm_all(section_data, section_addr).map_err(|e| {
+            FezinatorError::BinaryParsing(format!("Failed to disassemble section: {}", e))
+        })?;
+
+        // Verify start address is instruction-aligned
+        let start_instruction = insns.iter().find(|insn| insn.address() == start_addr);
+        if start_instruction.is_none() {
+            return Err(FezinatorError::InvalidBinary(format!(
+                "Start address 0x{:x} is not instruction-aligned",
+                start_addr
+            ))
+            .into());
+        }
+
+        // Find the instruction that should end the block
+        let mut end_instruction = None;
+        for insn in insns.iter() {
+            let insn_end = insn.address() + insn.bytes().len() as u64;
+            if insn_end == end_addr {
+                end_instruction = Some(insn);
+                break;
+            }
+            // Also check if this is an instruction that starts at the end address
+            if insn.address() == end_addr {
+                end_instruction = Some(insn);
+                break;
+            }
+        }
+
+        // If we didn't find an exact match, check if end_addr is a valid instruction boundary
+        if end_instruction.is_none() {
+            // Allow end_addr to be at any instruction boundary within the range
+            let valid_end = insns.iter().any(|insn| {
+                let insn_start = insn.address();
+                let insn_end = insn.address() + insn.bytes().len() as u64;
+                (insn_start == end_addr || insn_end == end_addr) && insn_start >= start_addr
+            });
+
+            if !valid_end {
+                return Err(FezinatorError::InvalidBinary(format!(
+                    "End address 0x{:x} is not instruction-aligned",
+                    end_addr
+                ))
+                .into());
+            }
+        }
+
+        // Extract the bytes from the section data
+        let start_offset = (start_addr - section_addr) as usize;
+        let end_offset = (end_addr - section_addr) as usize;
+
+        let assembly_block = section_data[start_offset..end_offset].to_vec();
+
+        // Verify the extracted block contains valid instructions
+        let block_insns = cs.disasm_all(&assembly_block, start_addr).map_err(|e| {
+            FezinatorError::BinaryParsing(format!(
+                "Extracted block contains invalid instructions: {}",
+                e
+            ))
+        })?;
+
+        if block_insns.is_empty() {
+            return Err(FezinatorError::InvalidBinary(
+                "Extracted range contains no valid instructions".into(),
+            )
+            .into());
+        }
+
+        Ok((start_addr, end_addr, assembly_block))
+    }
 }

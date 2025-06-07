@@ -24,6 +24,14 @@ pub struct ExtractCommand {
         help = "SQLite database path"
     )]
     database: PathBuf,
+
+    #[arg(
+        long,
+        value_names = ["START", "END"],
+        num_args = 2,
+        help = "Extract from specific address range (must be instruction-aligned)"
+    )]
+    range: Option<Vec<String>>,
 }
 
 impl ExtractCommand {
@@ -59,7 +67,28 @@ impl ExtractCommand {
             debug!("Full binary info: {:?}", binary_info);
         }
 
-        let (start_addr, end_addr, assembly_block) = extractor.extract_random_aligned_block()?;
+        let (start_addr, end_addr, assembly_block) = if let Some(range) = &self.range {
+            if range.len() != 2 {
+                return Err(anyhow::anyhow!(
+                    "Range option requires exactly two addresses"
+                ));
+            }
+
+            // Parse the addresses - support both hex (0x...) and decimal
+            let start_addr = Self::parse_address(&range[0])?;
+            let end_addr = Self::parse_address(&range[1])?;
+
+            if !self.quiet {
+                println!(
+                    "Extracting from specified range: 0x{:08x} - 0x{:08x}",
+                    start_addr, end_addr
+                );
+            }
+
+            extractor.extract_range(start_addr, end_addr)?
+        } else {
+            extractor.extract_random_aligned_block()?
+        };
 
         if !self.quiet {
             // Try to count instructions to show in output
@@ -94,5 +123,18 @@ impl ExtractCommand {
         }
 
         Ok(())
+    }
+
+    fn parse_address(addr_str: &str) -> Result<u64> {
+        if addr_str.starts_with("0x") || addr_str.starts_with("0X") {
+            // Parse as hexadecimal
+            u64::from_str_radix(&addr_str[2..], 16)
+                .map_err(|e| anyhow::anyhow!("Invalid hexadecimal address '{}': {}", addr_str, e))
+        } else {
+            // Parse as decimal
+            addr_str
+                .parse::<u64>()
+                .map_err(|e| anyhow::anyhow!("Invalid decimal address '{}': {}", addr_str, e))
+        }
     }
 }

@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::extractor::Extractor;
+    use object::ObjectSection;
     use std::fs;
     use std::process::Command;
     use tempfile::{NamedTempFile, TempDir};
@@ -119,6 +120,87 @@ mod tests {
             last_insn_end <= end_addr,
             "Last instruction should not exceed block boundary"
         );
+    }
+
+    #[test]
+    fn test_range_extraction_valid() {
+        let binary_file = create_test_binary();
+        let extractor = Extractor::new(binary_file.path().to_path_buf()).unwrap();
+
+        // First get a random block to find valid instruction addresses
+        let (start_addr, end_addr, _) = extractor.extract_random_aligned_block().unwrap();
+
+        // Now extract the exact same range
+        let (range_start, range_end, range_block) =
+            extractor.extract_range(start_addr, end_addr).unwrap();
+
+        assert_eq!(range_start, start_addr);
+        assert_eq!(range_end, end_addr);
+        assert!(!range_block.is_empty());
+
+        // Verify it contains valid instructions
+        let cs = extractor.create_capstone().unwrap();
+        let insns = cs.disasm_all(&range_block, range_start).unwrap();
+        assert!(!insns.is_empty());
+    }
+
+    #[test]
+    fn test_range_extraction_invalid_start() {
+        let binary_file = create_test_binary();
+        let extractor = Extractor::new(binary_file.path().to_path_buf()).unwrap();
+
+        // Get a valid range first to find an instruction address
+        let (_start_addr, _end_addr, _) = extractor.extract_random_aligned_block().unwrap();
+
+        // Create disassembler to examine the instructions
+        let cs = extractor.create_capstone().unwrap();
+
+        // Get the binary data for disassembly around our start address
+        let file = object::File::parse(&*extractor.binary_data).unwrap();
+        let text_section = extractor.find_executable_section(&file).unwrap();
+        let section_data = text_section.data().unwrap();
+        let section_addr = text_section.address();
+
+        // Find an instruction with length > 1 byte
+        let insns = cs.disasm_all(section_data, section_addr).unwrap();
+        let multi_byte_insn = insns.iter().find(|insn| insn.bytes().len() > 1);
+
+        if let Some(insn) = multi_byte_insn {
+            // Try to extract starting from middle of instruction (not instruction-aligned)
+            let bad_start = insn.address() + 1;
+            let bad_end = bad_start + 10;
+
+            let result = extractor.extract_range(bad_start, bad_end);
+            assert!(result.is_err());
+            assert!(result
+                .unwrap_err()
+                .to_string()
+                .contains("not instruction-aligned"));
+        } else {
+            // Fallback: try an obviously invalid address far outside the section
+            let bad_start = section_addr + section_data.len() as u64 + 1000;
+            let bad_end = bad_start + 10;
+
+            let result = extractor.extract_range(bad_start, bad_end);
+            assert!(result.is_err());
+        }
+    }
+
+    #[test]
+    fn test_range_extraction_invalid_order() {
+        let binary_file = create_test_binary();
+        let extractor = Extractor::new(binary_file.path().to_path_buf()).unwrap();
+
+        // Get a valid range first
+        let (start_addr, end_addr, _) = extractor.extract_random_aligned_block().unwrap();
+
+        // Try with swapped addresses
+        let result = extractor.extract_range(end_addr, start_addr);
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Start address must be less than end address"));
     }
 
     #[test]
