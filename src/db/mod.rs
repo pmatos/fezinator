@@ -226,10 +226,14 @@ impl Database {
         let count: usize =
             tx.query_row("SELECT COUNT(*) FROM extractions", [], |row| row.get(0))?;
 
-        // Delete all extractions
+        // Delete in correct order due to foreign key constraints:
+        // 1. Delete all analyses first (references extractions)
+        tx.execute("DELETE FROM analyses", [])?;
+
+        // 2. Delete all extractions (references binaries)
         tx.execute("DELETE FROM extractions", [])?;
 
-        // Delete all binaries (since we're removing all extractions)
+        // 3. Delete all binaries (no dependencies)
         tx.execute("DELETE FROM binaries", [])?;
 
         tx.commit()?;

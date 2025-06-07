@@ -52,10 +52,14 @@ impl RemoveCommand {
             println!("Removing all blocks from database...");
             let count = match db.remove_all_extractions() {
                 Ok(count) => count,
-                Err(_) => {
+                Err(e) => {
                     // Database exists but tables don't - treat as empty
-                    println!("✓ No blocks found, nothing to remove");
-                    return Ok(());
+                    if e.to_string().contains("no such table") {
+                        println!("✓ No blocks found, nothing to remove");
+                        return Ok(());
+                    } else {
+                        return Err(e);
+                    }
                 }
             };
             println!("✓ Removed {} blocks from database", count);
