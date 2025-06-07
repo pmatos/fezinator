@@ -3,6 +3,10 @@ name = "fezinator"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "fezinator"
+path = "src/main.rs"
+
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
 object = { version = "0.37", features = ["pe"] }
@@ -19,3 +23,4 @@ capstone = "0.12"
 
 [dev-dependencies]
 tempfile = "3.10"
+capstone = "0.12"

@@ -146,32 +146,209 @@ impl Analyzer {
 
     fn analyze_registers(
         &self,
-        cs: &Capstone,
+        _cs: &Capstone,
         insn: &Insn,
         read_regs: &mut HashSet<String>,
         written_regs: &mut HashSet<String>,
     ) -> Result<()> {
-        let detail = cs
-            .insn_detail(insn)
-            .map_err(|e| anyhow!("Failed to get instruction details: {}", e))?;
+        let mnemonic = insn.mnemonic().unwrap_or("");
+        let operands = insn.op_str().unwrap_or("");
 
-        // Get read registers
-        let (regs_read, regs_write) = (detail.regs_read(), detail.regs_write());
+        // Manual register analysis since capstone's register detection isn't reliable
+        self.analyze_registers_manual(mnemonic, operands, read_regs, written_regs)?;
 
-        // Add registers to sets
-        for &reg in regs_read {
-            if let Some(reg_name) = cs.reg_name(reg) {
-                read_regs.insert(reg_name);
+        Ok(())
+    }
+
+    fn analyze_registers_manual(
+        &self,
+        mnemonic: &str,
+        operands: &str,
+        read_regs: &mut HashSet<String>,
+        written_regs: &mut HashSet<String>,
+    ) -> Result<()> {
+        // Split operands by comma
+        let ops: Vec<&str> = operands.split(',').map(|s| s.trim()).collect();
+
+        match mnemonic {
+            "mov" | "movzx" | "movsx" => {
+                // mov dst, src - dst is written, src is read
+                if ops.len() >= 2 {
+                    // Handle destination
+                    if ops[0].contains('[') && ops[0].contains(']') {
+                        // Memory destination - extract addressing registers as read
+                        self.extract_read_registers(ops[0], read_regs);
+                    } else {
+                        // Register destination - mark as written
+                        self.extract_written_registers(ops[0], written_regs);
+                    }
+
+                    // Handle source - always read
+                    self.extract_read_registers(ops[1], read_regs);
+                }
             }
-        }
-
-        for &reg in regs_write {
-            if let Some(reg_name) = cs.reg_name(reg) {
-                written_regs.insert(reg_name);
+            "add" | "sub" | "and" | "or" | "xor" => {
+                // op dst, src - dst is read and written, src is read
+                if ops.len() >= 2 {
+                    self.extract_read_registers(ops[0], read_regs); // read before modify
+                    self.extract_written_registers(ops[0], written_regs); // written after
+                    self.extract_read_registers(ops[1], read_regs);
+                }
+                // These also affect flags
+                written_regs.insert("rflags".to_string());
+            }
+            "cmp" | "test" => {
+                // cmp/test op1, op2 - both operands are read, flags written
+                for op in &ops {
+                    self.extract_read_registers(op, read_regs);
+                }
+                written_regs.insert("rflags".to_string());
+            }
+            "inc" | "dec" | "neg" | "not" => {
+                // unary operations - operand is read and written
+                if !ops.is_empty() {
+                    self.extract_read_registers(ops[0], read_regs);
+                    self.extract_written_registers(ops[0], written_regs);
+                }
+                if mnemonic != "not" {
+                    // not doesn't affect flags
+                    written_regs.insert("rflags".to_string());
+                }
+            }
+            "jz" | "jnz" | "je" | "jne" | "jl" | "jle" | "jg" | "jge" | "js" | "jns" | "jc"
+            | "jnc" | "jo" | "jno" => {
+                // conditional jumps read flags
+                read_regs.insert("rflags".to_string());
+            }
+            "push" => {
+                // push src - src is read, rsp is read and written
+                if !ops.is_empty() {
+                    self.extract_read_registers(ops[0], read_regs);
+                }
+                read_regs.insert("rsp".to_string());
+                written_regs.insert("rsp".to_string());
+            }
+            "pop" => {
+                // pop dst - dst is written, rsp is read and written
+                if !ops.is_empty() {
+                    self.extract_written_registers(ops[0], written_regs);
+                }
+                read_regs.insert("rsp".to_string());
+                written_regs.insert("rsp".to_string());
+            }
+            "call" => {
+                // call affects rsp and potentially many registers
+                read_regs.insert("rsp".to_string());
+                written_regs.insert("rsp".to_string());
+                // Conservative: assume call can modify rax, rcx, rdx (caller-saved)
+                written_regs.insert("rax".to_string());
+                written_regs.insert("rcx".to_string());
+                written_regs.insert("rdx".to_string());
+            }
+            "ret" => {
+                // ret reads rsp and rax (return value)
+                read_regs.insert("rsp".to_string());
+                read_regs.insert("rax".to_string());
+                written_regs.insert("rsp".to_string());
+            }
+            "lea" => {
+                // lea dst, src - dst is written, registers in src are read
+                if ops.len() >= 2 {
+                    self.extract_written_registers(ops[0], written_regs);
+                    self.extract_read_registers(ops[1], read_regs);
+                }
+            }
+            _ => {
+                // For unknown instructions, conservatively analyze operands
+                for (i, op) in ops.iter().enumerate() {
+                    if i == 0 {
+                        // First operand is usually destination (written)
+                        self.extract_written_registers(op, written_regs);
+                    }
+                    // All operands are potentially read
+                    self.extract_read_registers(op, read_regs);
+                }
             }
         }
 
         Ok(())
+    }
+
+    fn extract_read_registers(&self, operand: &str, read_regs: &mut HashSet<String>) {
+        // Extract register names from operand string
+        for reg in self.find_registers_in_operand(operand) {
+            read_regs.insert(reg);
+        }
+    }
+
+    fn extract_written_registers(&self, operand: &str, written_regs: &mut HashSet<String>) {
+        // For memory operands like [reg], the register is read, not written
+        if operand.contains('[') && operand.contains(']') {
+            // Memory reference - this is a memory write, not a register write
+            // The addressing registers should be handled separately
+        } else {
+            // Direct register operand
+            for reg in self.find_registers_in_operand(operand) {
+                written_regs.insert(reg);
+            }
+        }
+    }
+
+    fn find_registers_in_operand(&self, operand: &str) -> Vec<String> {
+        let mut registers = Vec::new();
+
+        // List of x86/x86_64 registers to look for
+        let reg_patterns = [
+            // 64-bit registers
+            "rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp", "r8", "r9", "r10", "r11", "r12",
+            "r13", "r14", "r15", // 32-bit registers
+            "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "esp", // 16-bit registers
+            "ax", "bx", "cx", "dx", "si", "di", "bp", "sp", // 8-bit registers
+            "al", "bl", "cl", "dl", "ah", "bh", "ch", "dh",
+        ];
+
+        let operand_lower = operand.to_lowercase();
+
+        for &reg in &reg_patterns {
+            if operand_lower.contains(reg) {
+                // Check if it's a whole word (not part of another word)
+                if let Some(start) = operand_lower.find(reg) {
+                    let end = start + reg.len();
+                    let before_ok = start == 0
+                        || !operand_lower
+                            .chars()
+                            .nth(start - 1)
+                            .unwrap()
+                            .is_alphanumeric();
+                    let after_ok = end >= operand_lower.len()
+                        || !operand_lower.chars().nth(end).unwrap().is_alphanumeric();
+
+                    if before_ok && after_ok {
+                        // Normalize to canonical form (prefer 64-bit names)
+                        let canonical = self.normalize_register_to_64bit(reg);
+                        if !registers.contains(&canonical) {
+                            registers.push(canonical);
+                        }
+                    }
+                }
+            }
+        }
+
+        registers
+    }
+
+    fn normalize_register_to_64bit(&self, reg: &str) -> String {
+        match reg {
+            "eax" | "ax" | "al" | "ah" => "rax".to_string(),
+            "ebx" | "bx" | "bl" | "bh" => "rbx".to_string(),
+            "ecx" | "cx" | "cl" | "ch" => "rcx".to_string(),
+            "edx" | "dx" | "dl" | "dh" => "rdx".to_string(),
+            "esi" | "si" => "rsi".to_string(),
+            "edi" | "di" => "rdi".to_string(),
+            "ebp" | "bp" => "rbp".to_string(),
+            "esp" | "sp" => "rsp".to_string(),
+            _ => reg.to_string(), // Already 64-bit or other register
+        }
     }
 
     fn analyze_control_flow(
