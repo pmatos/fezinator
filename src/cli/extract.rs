@@ -59,14 +59,24 @@ impl ExtractCommand {
             debug!("Full binary info: {:?}", binary_info);
         }
 
-        let (start_addr, end_addr, assembly_block) = extractor.extract_random_block()?;
+        let (start_addr, end_addr, assembly_block) = extractor.extract_random_aligned_block()?;
 
         if !self.quiet {
+            // Try to count instructions to show in output
+            let instruction_count = if let Ok(cs) = extractor.create_capstone() {
+                cs.disasm_all(&assembly_block, start_addr)
+                    .map(|insns| insns.len())
+                    .unwrap_or(0)
+            } else {
+                0
+            };
+
             println!(
-                "Extracted block: 0x{:08x} - 0x{:08x} ({} bytes)",
+                "Extracted block: 0x{:08x} - 0x{:08x} ({} bytes, {} instructions)",
                 start_addr,
                 end_addr,
-                assembly_block.len()
+                assembly_block.len(),
+                instruction_count
             );
         }
 

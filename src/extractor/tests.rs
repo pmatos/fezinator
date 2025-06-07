@@ -61,13 +61,15 @@ mod tests {
         let binary_file = create_test_binary();
 
         let extractor = Extractor::new(binary_file.path().to_path_buf()).unwrap();
-        let (start, end, block) = extractor.extract_random_block().unwrap();
+        let (start, end, block) = extractor.extract_random_aligned_block().unwrap();
 
         assert!(start < end);
         assert_eq!(block.len(), (end - start) as usize);
         assert!(!block.is_empty());
-        assert!(block.len() >= 16);
-        assert!(block.len() <= 1024);
+        // With instruction alignment, blocks should be reasonably sized
+        assert!(block.len() >= 4); // At least 4 instructions minimum
+                                   // Since we limit to 32 instructions max and x86 instructions can be up to 15 bytes
+        assert!(block.len() <= 32 * 15); // Conservative upper bound
     }
 
     #[test]
@@ -78,7 +80,7 @@ mod tests {
 
         let mut extractions = Vec::new();
         for _ in 0..10 {
-            let (start, end, _) = extractor.extract_random_block().unwrap();
+            let (start, end, _) = extractor.extract_random_aligned_block().unwrap();
             extractions.push((start, end));
         }
 
@@ -88,6 +90,35 @@ mod tests {
             .collect::<std::collections::HashSet<_>>()
             .len();
         assert!(unique_count >= 1, "Should produce at least one extraction");
+    }
+
+    #[test]
+    fn test_instruction_alignment() {
+        let binary_file = create_test_binary();
+        let extractor = Extractor::new(binary_file.path().to_path_buf()).unwrap();
+
+        // Extract a block and verify it starts and ends on instruction boundaries
+        let (start_addr, end_addr, block) = extractor.extract_random_aligned_block().unwrap();
+
+        // Create a disassembler to verify instruction alignment
+        let cs = extractor.create_capstone().unwrap();
+
+        // Disassemble the extracted block
+        let insns = cs.disasm_all(&block, start_addr).unwrap();
+
+        // Should have at least some instructions
+        assert!(!insns.is_empty(), "Block should contain instructions");
+
+        // First instruction should start at the block's start address
+        assert_eq!(insns.first().unwrap().address(), start_addr);
+
+        // Last instruction should end at or before the block's end address
+        let last_insn = insns.last().unwrap();
+        let last_insn_end = last_insn.address() + last_insn.bytes().len() as u64;
+        assert!(
+            last_insn_end <= end_addr,
+            "Last instruction should not exceed block boundary"
+        );
     }
 
     #[test]
