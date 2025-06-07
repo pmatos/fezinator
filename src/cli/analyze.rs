@@ -24,10 +24,20 @@ pub struct AnalyzeCommand {
 
 impl AnalyzeCommand {
     pub fn execute(self) -> Result<()> {
+        // Check if database exists
+        if !self.database.exists() {
+            return Err(anyhow!("No database found"));
+        }
+
         let mut db = Database::new(&self.database)?;
 
         // Get the extraction to analyze
-        let extractions = db.list_extractions()?;
+        let extractions = match db.list_extractions() {
+            Ok(extractions) => extractions,
+            Err(_) => {
+                return Err(anyhow!("No blocks found in database"));
+            }
+        };
 
         if self.block_number == 0 || self.block_number > extractions.len() {
             return Err(anyhow!(

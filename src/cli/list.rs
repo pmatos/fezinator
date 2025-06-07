@@ -20,18 +20,26 @@ pub struct ListCommand {
 
 impl ListCommand {
     pub fn execute(self) -> Result<()> {
-        let db = Database::new(&self.database)?;
-
-        println!("Listing stored blocks from: {}", self.database.display());
-        println!();
-
-        let blocks = db.list_extractions()?;
-
-        if blocks.is_empty() {
-            println!("No blocks found in database.");
+        // Check if database file exists, if not, there are no blocks
+        if !self.database.exists() {
             return Ok(());
         }
 
+        let db = Database::new(&self.database)?;
+        let blocks = match db.list_extractions() {
+            Ok(blocks) => blocks,
+            Err(_) => {
+                // Database exists but tables don't - treat as empty
+                return Ok(());
+            }
+        };
+
+        if blocks.is_empty() {
+            return Ok(());
+        }
+
+        println!("Listing stored blocks from: {}", self.database.display());
+        println!();
         println!("Found {} blocks:", blocks.len());
         println!("{:-<80}", "");
 

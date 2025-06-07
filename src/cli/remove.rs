@@ -36,15 +36,37 @@ impl RemoveCommand {
             return Err(anyhow!("Cannot specify both --all and a block number"));
         }
 
+        // Check if database exists
+        if !self.database.exists() {
+            if self.all {
+                println!("✓ No database found, nothing to remove");
+            } else {
+                return Err(anyhow!("No database found"));
+            }
+            return Ok(());
+        }
+
         let mut db = Database::new(&self.database)?;
 
         if self.all {
             println!("Removing all blocks from database...");
-            let count = db.remove_all_extractions()?;
+            let count = match db.remove_all_extractions() {
+                Ok(count) => count,
+                Err(_) => {
+                    // Database exists but tables don't - treat as empty
+                    println!("✓ No blocks found, nothing to remove");
+                    return Ok(());
+                }
+            };
             println!("✓ Removed {} blocks from database", count);
         } else if let Some(block_num) = self.block_number {
             // Get list of extractions to find the one to delete
-            let extractions = db.list_extractions()?;
+            let extractions = match db.list_extractions() {
+                Ok(extractions) => extractions,
+                Err(_) => {
+                    return Err(anyhow!("No blocks found in database"));
+                }
+            };
 
             if block_num == 0 || block_num > extractions.len() {
                 return Err(anyhow!(
