@@ -47,6 +47,45 @@ cargo test --test integration_test
 cargo test -- --nocapture
 ```
 
+### Assembly Test Framework
+
+The project includes an assembly test framework for validating the analyzer module with manually written assembly code.
+
+#### Running Assembly Tests
+
+```bash
+# Run all assembly tests
+cargo test ann_asm
+
+# Run a specific assembly test
+cargo test ann_asm -- simple_mov
+cargo test ann_asm -- conditional_jump
+cargo test ann_asm -- memory_access
+cargo test ann_asm -- complex_example
+
+# Run with debug output
+cargo test ann_asm -- simple_mov --nocapture
+```
+
+#### Requirements
+- NASM assembler must be installed: `sudo apt install nasm`
+
+#### Test Files
+Assembly test files are located in `tests/asm/` with annotations:
+```asm
+; BITS: 64
+; LIVEIN: rdi, rsi
+; LIVEOUT: rax, rflags
+; EXITS: jz label, ret
+; MEMORY: LOAD rsi, STORE rdx
+mov rax, [rsi]
+test rdi, rdi
+jz done
+add rax, rdi
+done:
+    ret
+```
+
 ## Quality Assurance Tools
 
 ### Static Analysis Tools

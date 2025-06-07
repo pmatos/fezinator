@@ -1,8 +1,50 @@
+//! Assembly test framework for the fezinator analyzer
+//!
+//! This module provides a test framework for validating the analyzer's output
+//! using manually written annotated assembly files.
+//!
+//! # Running Tests
+//!
+//! Run all assembly tests:
+//! ```bash
+//! cargo test ann_asm
+//! ```
+//!
+//! Run a specific assembly test:
+//! ```bash
+//! cargo test ann_asm -- simple_mov
+//! cargo test ann_asm -- conditional_jump
+//! cargo test ann_asm -- memory_access
+//! cargo test ann_asm -- complex_example
+//! ```
+//!
+//! Run with debug output:
+//! ```bash
+//! cargo test ann_asm -- simple_mov --nocapture
+//! ```
+//!
+//! # Test File Format
+//!
+//! Assembly test files are located in `tests/asm/` and use annotations:
+//! ```asm
+//! ; BITS: 64
+//! ; LIVEIN: rdi, rsi
+//! ; LIVEOUT: rax, rflags
+//! ; EXITS: jz label, ret
+//! ; MEMORY: LOAD rsi, STORE rdx
+//! mov rax, [rsi]
+//! test rdi, rdi
+//! jz done
+//! add rax, rdi
+//! done:
+//!     ret
+//! ```
+
 use anyhow::{anyhow, Result};
 use capstone::prelude::*;
 use std::collections::HashSet;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 use tempfile::TempDir;
 
@@ -15,15 +57,15 @@ struct AsmTest {
     pub bits: u32,
     pub live_in: HashSet<String>,
     pub live_out: HashSet<String>,
-    pub expected_exits: Vec<String>,
-    pub expected_memory: Vec<MemoryExpectation>,
+    pub _expected_exits: Vec<String>,
+    pub _expected_memory: Vec<MemoryExpectation>,
     pub assembly_code: String,
 }
 
 #[derive(Debug, Clone)]
 struct MemoryExpectation {
-    pub access_type: String, // "STORE", "LOAD", "RW"
-    pub register: Option<String>,
+    pub _access_type: String, // "STORE", "LOAD", "RW"
+    pub _register: Option<String>,
 }
 
 impl AsmTest {
@@ -95,8 +137,8 @@ impl AsmTest {
             bits,
             live_in,
             live_out,
-            expected_exits,
-            expected_memory,
+            _expected_exits: expected_exits,
+            _expected_memory: expected_memory,
             assembly_code,
         })
     }
@@ -120,8 +162,8 @@ impl AsmTest {
                 };
 
                 expectations.push(MemoryExpectation {
-                    access_type,
-                    register,
+                    _access_type: access_type,
+                    _register: register,
                 });
             }
         }
@@ -274,54 +316,11 @@ impl AsmTest {
     }
 
     fn run_test(&self) -> Result<()> {
-        println!("Running assembly test: {}", self.name);
-
-        let (start_addr, end_addr, assembly_block) = self.assemble_and_extract()?;
-
-        println!(
-            "  Extracted block: 0x{:x} - 0x{:x} ({} bytes)",
-            start_addr,
-            end_addr,
-            assembly_block.len()
-        );
-        println!(
-            "  Raw bytes: {:02x?}",
-            &assembly_block[..assembly_block.len().min(32)]
-        );
+        let (start_addr, _end_addr, assembly_block) = self.assemble_and_extract()?;
 
         // Create analyzer
         let architecture = if self.bits == 64 { "x86_64" } else { "i386" };
         let analyzer = Analyzer::new(architecture);
-
-        // First, let's see what instructions we actually extracted
-        let cs = match self.bits {
-            64 => Capstone::new()
-                .x86()
-                .mode(arch::x86::ArchMode::Mode64)
-                .detail(false)
-                .build(),
-            32 => Capstone::new()
-                .x86()
-                .mode(arch::x86::ArchMode::Mode32)
-                .detail(false)
-                .build(),
-            _ => return Err(anyhow!("Unsupported architecture: {} bits", self.bits)),
-        }
-        .map_err(|e| anyhow!("Failed to create disassembler: {}", e))?;
-
-        let insns = cs
-            .disasm_all(&assembly_block, start_addr)
-            .map_err(|e| anyhow!("Failed to disassemble block: {}", e))?;
-
-        println!("  Disassembled instructions:");
-        for insn in insns.iter() {
-            println!(
-                "    0x{:x}: {} {}",
-                insn.address(),
-                insn.mnemonic().unwrap_or("?"),
-                insn.op_str().unwrap_or("")
-            );
-        }
 
         // Analyze the block
         let analysis = analyzer.analyze_block(&assembly_block, start_addr)?;
@@ -340,6 +339,40 @@ impl AsmTest {
 
         // Check live-in registers
         if actual_live_in != expected_live_in {
+            // Debug info when test fails
+            eprintln!("Assembly code:");
+            eprintln!("{}", self.assembly_code);
+            eprintln!();
+
+            let cs = match self.bits {
+                64 => Capstone::new()
+                    .x86()
+                    .mode(arch::x86::ArchMode::Mode64)
+                    .detail(false)
+                    .build(),
+                32 => Capstone::new()
+                    .x86()
+                    .mode(arch::x86::ArchMode::Mode32)
+                    .detail(false)
+                    .build(),
+                _ => return Err(anyhow!("Unsupported architecture: {} bits", self.bits)),
+            }
+            .map_err(|e| anyhow!("Failed to create disassembler: {}", e))?;
+
+            let insns = cs
+                .disasm_all(&assembly_block, start_addr)
+                .map_err(|e| anyhow!("Failed to disassemble block: {}", e))?;
+
+            eprintln!("Disassembled instructions:");
+            for insn in insns.iter() {
+                eprintln!(
+                    "  0x{:x}: {} {}",
+                    insn.address(),
+                    insn.mnemonic().unwrap_or("?"),
+                    insn.op_str().unwrap_or("")
+                );
+            }
+
             return Err(anyhow!(
                 "Live-in registers mismatch in test '{}'\nExpected: {:?}\nActual: {:?}",
                 self.name,
@@ -361,7 +394,6 @@ impl AsmTest {
         // TODO: Add checks for exits and memory accesses
         // This would require more sophisticated parsing of the expected results
 
-        println!("✓ Assembly test '{}' passed", self.name);
         Ok(())
     }
 
@@ -376,7 +408,97 @@ impl AsmTest {
     }
 }
 
-fn find_asm_test_files() -> Vec<PathBuf> {
+#[test]
+fn ann_asm() {
+    // Get test filter from arguments
+    let args: Vec<String> = std::env::args().collect();
+
+    let test_filter = args
+        .iter()
+        .skip(2) // skip binary name and test name
+        .filter(|&s| s != "--nocapture")
+        .next()
+        .map(|s| s.as_str());
+
+    let test_files = find_asm_test_files();
+
+    if test_files.is_empty() {
+        println!("No assembly test files found in tests/asm/");
+        return;
+    }
+
+    let mut tests_to_run = Vec::new();
+
+    if let Some(filter) = test_filter {
+        // Run specific test
+        let test_name = if filter.ends_with(".asm") {
+            filter.to_string()
+        } else {
+            format!("{}.asm", filter)
+        };
+
+        if let Some(test_file) = test_files.iter().find(|f| {
+            f.file_name()
+                .and_then(|n| n.to_str())
+                .map_or(false, |name| name == test_name)
+        }) {
+            tests_to_run.push(test_file.clone());
+        } else {
+            panic!(
+                "Assembly test '{}' not found. Available tests: {:?}",
+                filter,
+                test_files
+                    .iter()
+                    .filter_map(|f| f.file_stem()?.to_str())
+                    .collect::<Vec<_>>()
+            );
+        }
+    } else {
+        // Run all tests
+        tests_to_run = test_files;
+    }
+
+    let mut passed = 0;
+    let mut failed = 0;
+    let total_tests = tests_to_run.len();
+
+    for test_file in &tests_to_run {
+        let test_name = test_file
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("unknown");
+
+        match AsmTest::parse_from_file(&test_file) {
+            Ok(test) => match test.run_test() {
+                Ok(_) => {
+                    println!("✓ Assembly test '{}' passed", test_name);
+                    passed += 1;
+                }
+                Err(e) => {
+                    eprintln!("❌ Assembly test '{}' failed: {}", test_name, e);
+                    failed += 1;
+                }
+            },
+            Err(e) => {
+                eprintln!("❌ Failed to parse test file '{}': {}", test_name, e);
+                failed += 1;
+            }
+        }
+    }
+
+    if total_tests > 1 {
+        println!(
+            "\nAssembly test results: {} passed, {} failed",
+            passed, failed
+        );
+    }
+
+    if failed > 0 {
+        panic!("Some assembly tests failed");
+    }
+}
+
+fn find_asm_test_files() -> Vec<std::path::PathBuf> {
     let test_dir = Path::new("tests/asm");
     if !test_dir.exists() {
         return Vec::new();
@@ -395,42 +517,4 @@ fn find_asm_test_files() -> Vec<PathBuf> {
 
     files.sort();
     files
-}
-
-#[test]
-fn test_asm_integration() {
-    let test_files = find_asm_test_files();
-
-    if test_files.is_empty() {
-        println!("No assembly test files found in tests/asm/");
-        return;
-    }
-
-    let mut passed = 0;
-    let mut failed = 0;
-
-    for test_file in test_files {
-        match AsmTest::parse_from_file(&test_file) {
-            Ok(test) => match test.run_test() {
-                Ok(_) => passed += 1,
-                Err(e) => {
-                    eprintln!("❌ Test failed: {}", e);
-                    failed += 1;
-                }
-            },
-            Err(e) => {
-                eprintln!("❌ Failed to parse test file {:?}: {}", test_file, e);
-                failed += 1;
-            }
-        }
-    }
-
-    println!(
-        "\nAssembly test results: {} passed, {} failed",
-        passed, failed
-    );
-
-    if failed > 0 {
-        panic!("Some assembly tests failed");
-    }
 }
