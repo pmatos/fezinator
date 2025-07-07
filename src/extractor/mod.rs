@@ -152,7 +152,7 @@ impl Extractor {
                 .detail(false)
                 .build()
                 .map_err(|e| {
-                    FezinatorError::BinaryParsing(format!("Failed to create x86 capstone: {}", e))
+                    FezinatorError::BinaryParsing(format!("Failed to create x86 capstone: {e}"))
                 })?,
             "x86_64" => capstone::Capstone::new()
                 .x86()
@@ -160,10 +160,7 @@ impl Extractor {
                 .detail(false)
                 .build()
                 .map_err(|e| {
-                    FezinatorError::BinaryParsing(format!(
-                        "Failed to create x86_64 capstone: {}",
-                        e
-                    ))
+                    FezinatorError::BinaryParsing(format!("Failed to create x86_64 capstone: {e}"))
                 })?,
             _ => {
                 return Err(FezinatorError::InvalidBinary(format!(
@@ -196,7 +193,7 @@ impl Extractor {
 
         // Disassemble the entire section to get instruction boundaries
         let insns = cs.disasm_all(section_data, section_addr).map_err(|e| {
-            FezinatorError::BinaryParsing(format!("Failed to disassemble section: {}", e))
+            FezinatorError::BinaryParsing(format!("Failed to disassemble section: {e}"))
         })?;
 
         if insns.len() < 2 {
@@ -282,8 +279,7 @@ impl Extractor {
         // Validate that addresses are within the section
         if start_addr < section_addr || end_addr > section_end {
             return Err(FezinatorError::InvalidBinary(format!(
-                "Address range 0x{:x}-0x{:x} is outside executable section (0x{:x}-0x{:x})",
-                start_addr, end_addr, section_addr, section_end
+                "Address range 0x{start_addr:x}-0x{end_addr:x} is outside executable section (0x{section_addr:x}-0x{section_end:x})"
             ))
             .into());
         }
@@ -292,15 +288,14 @@ impl Extractor {
 
         // Disassemble the entire section to verify instruction alignment
         let insns = cs.disasm_all(section_data, section_addr).map_err(|e| {
-            FezinatorError::BinaryParsing(format!("Failed to disassemble section: {}", e))
+            FezinatorError::BinaryParsing(format!("Failed to disassemble section: {e}"))
         })?;
 
         // Verify start address is instruction-aligned
         let start_instruction = insns.iter().find(|insn| insn.address() == start_addr);
         if start_instruction.is_none() {
             return Err(FezinatorError::InvalidBinary(format!(
-                "Start address 0x{:x} is not instruction-aligned",
-                start_addr
+                "Start address 0x{start_addr:x} is not instruction-aligned"
             ))
             .into());
         }
@@ -331,8 +326,7 @@ impl Extractor {
 
             if !valid_end {
                 return Err(FezinatorError::InvalidBinary(format!(
-                    "End address 0x{:x} is not instruction-aligned",
-                    end_addr
+                    "End address 0x{end_addr:x} is not instruction-aligned"
                 ))
                 .into());
             }
@@ -347,8 +341,7 @@ impl Extractor {
         // Verify the extracted block contains valid instructions
         let block_insns = cs.disasm_all(&assembly_block, start_addr).map_err(|e| {
             FezinatorError::BinaryParsing(format!(
-                "Extracted block contains invalid instructions: {}",
-                e
+                "Extracted block contains invalid instructions: {e}"
             ))
         })?;
 

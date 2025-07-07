@@ -64,7 +64,7 @@ impl ExtractCommand {
         }
 
         if self.verbose {
-            debug!("Full binary info: {:?}", binary_info);
+            debug!("Full binary info: {binary_info:?}");
         }
 
         let (start_addr, end_addr, assembly_block) = if let Some(range) = &self.range {
@@ -79,10 +79,7 @@ impl ExtractCommand {
             let end_addr = Self::parse_address(&range[1])?;
 
             if !self.quiet {
-                println!(
-                    "Extracting from specified range: 0x{:08x} - 0x{:08x}",
-                    start_addr, end_addr
-                );
+                println!("Extracting from specified range: 0x{start_addr:08x} - 0x{end_addr:08x}");
             }
 
             extractor.extract_range(start_addr, end_addr)?

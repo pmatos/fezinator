@@ -76,7 +76,7 @@ impl AnalyzeCommand {
             let mut regs: Vec<_> = analysis.live_in_registers.iter().collect();
             regs.sort();
             for reg in regs {
-                println!("  - {}", reg);
+                println!("  - {reg}");
             }
         }
         println!();
@@ -91,7 +91,7 @@ impl AnalyzeCommand {
             let mut regs: Vec<_> = analysis.live_out_registers.iter().collect();
             regs.sort();
             for reg in regs {
-                println!("  - {}", reg);
+                println!("  - {reg}");
             }
         }
         println!();
@@ -103,21 +103,21 @@ impl AnalyzeCommand {
                 ExitType::FallThrough => println!("Fall through"),
                 ExitType::UnconditionalJump => {
                     if let Some(target) = exit.target {
-                        println!("Unconditional jump to 0x{:08x}", target);
+                        println!("Unconditional jump to 0x{target:08x}");
                     } else {
                         println!("Unconditional indirect jump");
                     }
                 }
                 ExitType::ConditionalJump => {
                     if let Some(target) = exit.target {
-                        println!("Conditional jump to 0x{:08x}", target);
+                        println!("Conditional jump to 0x{target:08x}");
                     } else {
                         println!("Conditional indirect jump");
                     }
                 }
                 ExitType::Call => {
                     if let Some(target) = exit.target {
-                        println!("Call to 0x{:08x}", target);
+                        println!("Call to 0x{target:08x}");
                     } else {
                         println!("Indirect call");
                     }

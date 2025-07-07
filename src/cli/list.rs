@@ -62,16 +62,16 @@ impl ListCommand {
                 if let Some(results) = &block.analysis_results {
                     if let Ok(summary) = serde_json::from_str::<serde_json::Value>(results) {
                         if let Some(instructions) = summary.get("instructions") {
-                            println!("  Instructions: {}", instructions);
+                            println!("  Instructions: {instructions}");
                         }
                         if let Some(live_in) = summary.get("live_in").and_then(|v| v.as_str()) {
                             if !live_in.is_empty() {
-                                println!("  Live-in: {}", live_in);
+                                println!("  Live-in: {live_in}");
                             }
                         }
                         if let Some(live_out) = summary.get("live_out").and_then(|v| v.as_str()) {
                             if !live_out.is_empty() {
-                                println!("  Live-out: {}", live_out);
+                                println!("  Live-out: {live_out}");
                             }
                         }
                     }
@@ -80,14 +80,14 @@ impl ListCommand {
 
             if self.verbose && !block.assembly_block.is_empty() {
                 let preview_len = 32.min(block.assembly_block.len());
-                println!("  Preview (first {} bytes):", preview_len);
+                println!("  Preview (first {preview_len} bytes):");
                 print!("    ");
                 for (i, byte) in block.assembly_block[..preview_len].iter().enumerate() {
                     if i > 0 && i % 16 == 0 {
                         println!();
                         print!("    ");
                     }
-                    print!("{:02x} ", byte);
+                    print!("{byte:02x} ");
                 }
                 println!();
             }

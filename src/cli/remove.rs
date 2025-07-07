@@ -62,7 +62,7 @@ impl RemoveCommand {
                     }
                 }
             };
-            println!("✓ Removed {} blocks from database", count);
+            println!("✓ Removed {count} blocks from database");
         } else if let Some(block_num) = self.block_number {
             // Get list of extractions to find the one to delete
             let extractions = match db.list_extractions() {
@@ -82,7 +82,7 @@ impl RemoveCommand {
             // Block numbers are 1-indexed in the UI, but 0-indexed in the vector
             let extraction = &extractions[block_num - 1];
 
-            println!("Removing block #{} from database...", block_num);
+            println!("Removing block #{block_num} from database...");
             println!("  Binary: {}", extraction.binary_path);
             println!(
                 "  Address range: 0x{:08x} - 0x{:08x}",
