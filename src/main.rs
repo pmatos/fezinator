@@ -6,11 +6,13 @@ mod cli;
 mod db;
 mod error;
 mod extractor;
+mod simulator;
 
 use cli::analyze::AnalyzeCommand;
 use cli::extract::ExtractCommand;
 use cli::list::ListCommand;
 use cli::remove::RemoveCommand;
+use cli::simulate::SimulateCommand;
 
 #[derive(Parser)]
 #[command(name = "fezinator")]
@@ -26,6 +28,7 @@ enum Commands {
     List(ListCommand),
     Remove(RemoveCommand),
     Analyze(AnalyzeCommand),
+    Simulate(SimulateCommand),
 }
 
 fn main() -> Result<()> {
@@ -39,5 +42,6 @@ fn main() -> Result<()> {
         Commands::List(cmd) => cmd.execute(),
         Commands::Remove(cmd) => cmd.execute(),
         Commands::Analyze(cmd) => cmd.execute(),
+        Commands::Simulate(cmd) => cmd.execute(),
     }
 }
