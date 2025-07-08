@@ -85,6 +85,38 @@ impl Database {
             [],
         )?;
 
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS simulations (
+                id INTEGER PRIMARY KEY,
+                extraction_id INTEGER NOT NULL,
+                analysis_id INTEGER NOT NULL,
+                simulation_id TEXT NOT NULL,
+                
+                -- Input state
+                initial_registers TEXT NOT NULL,
+                initial_memory TEXT NOT NULL,
+                
+                -- Output state
+                final_registers TEXT NOT NULL,
+                final_memory TEXT NOT NULL,
+                final_flags INTEGER NOT NULL,
+                
+                -- Execution metadata
+                execution_time_ns INTEGER NOT NULL,
+                exit_code INTEGER NOT NULL,
+                emulator_used TEXT,
+                
+                -- Generated files (for debugging)
+                assembly_file_path TEXT,
+                binary_file_path TEXT,
+                
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (extraction_id) REFERENCES extractions(id),
+                FOREIGN KEY (analysis_id) REFERENCES analyses(id)
+            )",
+            [],
+        )?;
+
         Ok(())
     }
 

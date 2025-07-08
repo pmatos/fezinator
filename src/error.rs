@@ -13,4 +13,10 @@ pub enum FezinatorError {
 
     #[error("Invalid binary format: {0}")]
     InvalidBinary(String),
+
+    #[error("Simulation error: {0}")]
+    Simulation(String),
 }
+
+pub type Error = FezinatorError;
+pub type Result<T> = std::result::Result<T, Error>;
