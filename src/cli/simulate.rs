@@ -122,8 +122,9 @@ impl SimulateCommand {
             simulator.random_generator = crate::simulator::RandomStateGenerator::with_seed(seed);
         }
 
-        // For now, we'll create a mock analysis since we don't have full analysis loading
-        // In a real implementation, this would load the actual analysis from the database
+        // TODO: CODE_QUALITY: Replace mock analysis with actual database loading
+        // Current implementation uses mock analysis instead of loading real data
+        // Recommendation: Implement actual loading of BlockAnalysis from database
         let mock_analysis = self.create_mock_analysis();
 
         // Run simulations
@@ -162,7 +163,9 @@ impl SimulateCommand {
                         }
                     }
 
-                    // TODO: Store simulation results in database
+                    // TODO: BUG: Complete database storage implementation
+                    // Current implementation doesn't store simulation results in database
+                    // Recommendation: Implement proper database storage for simulation results
                     // db.store_simulation_result(extraction.id, &result)?;
                 }
                 Err(e) => {

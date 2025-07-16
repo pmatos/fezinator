@@ -41,12 +41,19 @@ impl ExecutionHarness {
     fn execute_native(&self, binary_path: &Path) -> Result<ExecutionResult> {
         let start_time = Instant::now();
 
+        // TODO: SECURITY: Implement process sandboxing for code execution
+        // This executes generated assembly directly without sandboxing, which poses significant security risks.
+        // Recommendation: Implement containerization or chroot jail for execution
+        // Alternative: Add strict resource limits and process isolation
         let output = Command::new(binary_path)
             .output()
             .map_err(|e| Error::Simulation(format!("Failed to execute binary: {e}")))?;
 
         let execution_time = start_time.elapsed();
 
+        // TODO: PERFORMANCE: Implement proper timeout handling 
+        // Current implementation checks elapsed time after process finishes, not enforcing timeout during execution
+        // Consider using timeout-aware spawn API or manually killing process if exceeds timeout
         if execution_time > Duration::from_secs(self.timeout_seconds) {
             return Err(Error::Simulation("Execution timeout".to_string()));
         }
