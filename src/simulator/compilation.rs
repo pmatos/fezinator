@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::Write;
+use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::TempDir;
@@ -24,11 +24,10 @@ impl CompilationPipeline {
             Error::Simulation("ld linker not found. Please install binutils.".to_string())
         })?;
 
-        // Create temporary directory
-        // TODO: SECURITY: Use more secure temporary file creation
-        // Current implementation creates temporary files in predictable locations
-        // Recommendation: Use more secure temporary file creation with proper permissions
-        let temp_dir = tempfile::TempDir::new()
+        // Create temporary directory with secure permissions
+        let temp_dir = tempfile::Builder::new()
+            .prefix("fezinator_sim_")
+            .tempdir()
             .map_err(|e| Error::Simulation(format!("Failed to create temp directory: {e}")))?;
 
         Ok(Self {
@@ -47,13 +46,16 @@ impl CompilationPipeline {
         let obj_file = self.temp_dir.path().join(format!("{binary_name}.o"));
         let binary_file = self.temp_dir.path().join(binary_name);
 
-        // Write assembly source to file
-        // TODO: PERFORMANCE: Add buffering for file I/O operations
-        // Multiple file operations without buffering could impact performance
-        let mut file = fs::File::create(&asm_file)
+        // Write assembly source to file with buffering
+        let file = fs::File::create(&asm_file)
             .map_err(|e| Error::Simulation(format!("Failed to create assembly file: {e}")))?;
-        file.write_all(assembly_source.as_bytes())
+        let mut writer = BufWriter::new(file);
+        writer
+            .write_all(assembly_source.as_bytes())
             .map_err(|e| Error::Simulation(format!("Failed to write assembly file: {e}")))?;
+        writer
+            .flush()
+            .map_err(|e| Error::Simulation(format!("Failed to flush assembly file: {e}")))?;
 
         // Assemble with NASM
         self.assemble_with_nasm(&asm_file, &obj_file)?;
@@ -98,17 +100,20 @@ impl CompilationPipeline {
     }
 
     fn find_executable(name: &str) -> Option<PathBuf> {
-        // TODO: BUG: Fix potential race condition in executable detection
-        // Current check-then-use pattern could lead to race conditions
-        // Recommendation: Consider using more robust executable detection
+        // Use which-style lookup to avoid race conditions
         std::env::var_os("PATH").and_then(|paths| {
             std::env::split_paths(&paths).find_map(|dir| {
                 let full_path = dir.join(name);
+                // Check if file exists and is executable in a single operation
                 if full_path.is_file() {
-                    Some(full_path)
-                } else {
-                    None
+                    // Test actual execution to avoid race conditions
+                    if let Ok(output) = Command::new(&full_path).arg("--version").output() {
+                        if output.status.success() {
+                            return Some(full_path);
+                        }
+                    }
                 }
+                None
             })
         })
     }

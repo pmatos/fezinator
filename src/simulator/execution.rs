@@ -17,6 +17,12 @@ pub struct ExecutionHarness {
     pub timeout_seconds: u64,
 }
 
+impl Default for ExecutionHarness {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ExecutionHarness {
     pub fn new() -> Self {
         Self { timeout_seconds: 5 }
@@ -51,7 +57,7 @@ impl ExecutionHarness {
 
         let execution_time = start_time.elapsed();
 
-        // TODO: PERFORMANCE: Implement proper timeout handling 
+        // TODO: PERFORMANCE: Implement proper timeout handling
         // Current implementation checks elapsed time after process finishes, not enforcing timeout during execution
         // Consider using timeout-aware spawn API or manually killing process if exceeds timeout
         if execution_time > Duration::from_secs(self.timeout_seconds) {

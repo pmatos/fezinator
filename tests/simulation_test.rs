@@ -139,7 +139,14 @@ fn test_simulate_command_error_handling() {
 
     // Test simulate command with no database (should fail gracefully)
     let output = Command::new("cargo")
-        .args(["run", "--", "simulate", "1"])
+        .args([
+            "run",
+            "--",
+            "simulate",
+            "1",
+            "--database",
+            "/tmp/nonexistent.db",
+        ])
         .output()
         .expect("Failed to execute command");
 
