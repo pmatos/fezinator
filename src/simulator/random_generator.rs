@@ -8,6 +8,12 @@ pub struct RandomStateGenerator {
     rng: StdRng,
 }
 
+impl Default for RandomStateGenerator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RandomStateGenerator {
     pub fn new() -> Self {
         Self {

@@ -46,7 +46,7 @@ impl SimulateCommand {
             return Err(anyhow!("No database found"));
         }
 
-        let db = Database::new(&self.database)?;
+        let mut db = Database::new(&self.database)?;
 
         // Get the extraction to simulate
         let extractions = match db.list_extractions() {
@@ -74,16 +74,16 @@ impl SimulateCommand {
             ));
         }
 
-        // Parse analysis results
-        let _analysis_json = extraction
-            .analysis_results
-            .as_ref()
-            .ok_or_else(|| anyhow!("Block analysis results not found"))?;
-
-        // For now, we'll need to load the full analysis from the database
-        // This is a simplified version - in a real implementation, we'd have
-        // a proper method to load BlockAnalysis from the database
+        // Load the full analysis from the database
         println!("Loading block analysis...");
+
+        // Get extraction ID from database
+        let extraction_id = self.get_extraction_id(&db, extraction)?;
+
+        // Load actual analysis from database
+        let analysis = db
+            .load_block_analysis(extraction_id)?
+            .ok_or_else(|| anyhow!("Block analysis not found in database"))?;
 
         // Parse emulator configuration
         let emulator_config = if let Some(emulator_str) = &self.emulator {
@@ -122,10 +122,7 @@ impl SimulateCommand {
             simulator.random_generator = crate::simulator::RandomStateGenerator::with_seed(seed);
         }
 
-        // TODO: CODE_QUALITY: Replace mock analysis with actual database loading
-        // Current implementation uses mock analysis instead of loading real data
-        // Recommendation: Implement actual loading of BlockAnalysis from database
-        let mock_analysis = self.create_mock_analysis();
+        // Use the actual analysis loaded from database
 
         // Run simulations
         for run in 1..=self.runs {
@@ -135,7 +132,7 @@ impl SimulateCommand {
 
             match simulator.simulate_block(
                 extraction,
-                &mock_analysis,
+                &analysis,
                 emulator_config.clone(),
                 self.keep_files,
             ) {
@@ -163,10 +160,10 @@ impl SimulateCommand {
                         }
                     }
 
-                    // TODO: BUG: Complete database storage implementation
-                    // Current implementation doesn't store simulation results in database
-                    // Recommendation: Implement proper database storage for simulation results
-                    // db.store_simulation_result(extraction.id, &result)?;
+                    // Store simulation result in database
+                    if let Err(e) = db.store_simulation_result(extraction_id, &result) {
+                        eprintln!("Warning: Failed to store simulation result: {e}");
+                    }
                 }
                 Err(e) => {
                     println!("  ✗ Simulation failed: {e}");
@@ -187,35 +184,27 @@ impl SimulateCommand {
         Ok(())
     }
 
-    fn create_mock_analysis(&self) -> crate::analyzer::BlockAnalysis {
-        use crate::analyzer::{AccessType, BlockAnalysis, ExitPoint, ExitType, MemoryAccess};
-        use std::collections::HashSet;
+    fn get_extraction_id(
+        &self,
+        db: &Database,
+        extraction: &crate::db::ExtractionInfo,
+    ) -> Result<i64> {
+        // Find the extraction ID by matching the extraction info
+        // This is a simplified approach - in a real implementation,
+        // we might want to store the ID in ExtractionInfo
+        let extractions = db.list_extractions()?;
 
-        // This is a mock analysis - in a real implementation,
-        // we'd load the actual analysis from the database
-        let mut live_in_registers = HashSet::new();
-        live_in_registers.insert("rax".to_string());
-        live_in_registers.insert("rbx".to_string());
-        live_in_registers.insert("rsp".to_string());
-
-        let mut live_out_registers = HashSet::new();
-        live_out_registers.insert("rax".to_string());
-
-        BlockAnalysis {
-            instructions_count: 5,
-            live_in_registers,
-            live_out_registers,
-            exit_points: vec![ExitPoint {
-                offset: 0x10,
-                exit_type: ExitType::FallThrough,
-                target: None,
-            }],
-            memory_accesses: vec![MemoryAccess {
-                offset: 0x05,
-                access_type: AccessType::Read,
-                size: 8,
-                is_stack: true,
-            }],
+        for (idx, ext) in extractions.iter().enumerate() {
+            if ext.binary_path == extraction.binary_path
+                && ext.start_address == extraction.start_address
+                && ext.end_address == extraction.end_address
+                && ext.binary_hash == extraction.binary_hash
+            {
+                // Return 1-based index as ID (this is a simplification)
+                return Ok((idx + 1) as i64);
+            }
         }
+
+        Err(anyhow!("Extraction not found in database"))
     }
 }

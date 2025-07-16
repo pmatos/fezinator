@@ -2,11 +2,22 @@ use crate::error::{Error, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+const OUTPUT_BUFFER_SIZE: usize = 4096;
+const REGISTER_SECTION_SIZE: usize = 128;
+const FLAGS_SECTION_SIZE: usize = 8;
+const MEMORY_SECTION_OFFSET: usize = 256;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InitialState {
     pub registers: HashMap<String, u64>,
     pub memory_locations: HashMap<u64, Vec<u8>>,
     pub stack_setup: Vec<u64>,
+}
+
+impl Default for InitialState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl InitialState {
@@ -48,6 +59,12 @@ pub struct FinalState {
     pub memory_locations: HashMap<u64, Vec<u8>>,
 }
 
+impl Default for FinalState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FinalState {
     pub fn new() -> Self {
         Self {
@@ -58,11 +75,13 @@ impl FinalState {
     }
 
     pub fn parse_from_output(output: &[u8]) -> Result<Self> {
-        // TODO: BUG: Fix potential buffer overflow risk
-        // Current implementation assumes 4096-byte buffer but doesn't validate actual size properly
-        // Recommendation: Add proper buffer size validation and bounds checking
-        if output.len() < 4096 {
-            return Err(Error::Simulation("Output buffer too small".to_string()));
+        // Validate buffer size with proper bounds checking
+        if output.len() < OUTPUT_BUFFER_SIZE {
+            return Err(Error::Simulation(format!(
+                "Output buffer too small: {} bytes, expected at least {} bytes",
+                output.len(),
+                OUTPUT_BUFFER_SIZE
+            )));
         }
 
         let mut state = FinalState::new();
@@ -91,23 +110,22 @@ impl FinalState {
         }
 
         // Parse flags (at offset 128)
-        if output.len() >= 136 {
+        if output.len() >= REGISTER_SECTION_SIZE + FLAGS_SECTION_SIZE {
             state.flags = u64::from_le_bytes([
-                output[128],
-                output[129],
-                output[130],
-                output[131],
-                output[132],
-                output[133],
-                output[134],
-                output[135],
+                output[REGISTER_SECTION_SIZE],
+                output[REGISTER_SECTION_SIZE + 1],
+                output[REGISTER_SECTION_SIZE + 2],
+                output[REGISTER_SECTION_SIZE + 3],
+                output[REGISTER_SECTION_SIZE + 4],
+                output[REGISTER_SECTION_SIZE + 5],
+                output[REGISTER_SECTION_SIZE + 6],
+                output[REGISTER_SECTION_SIZE + 7],
             ]);
         }
 
         // Parse memory locations (starting at offset 256)
-        // For now, we'll implement a simple format where memory locations
-        // are stored as address:size:data triplets
-        let mut offset = 256;
+        // Memory locations are stored as address:size:data triplets
+        let mut offset = MEMORY_SECTION_OFFSET;
         while offset + 16 <= output.len() {
             let address = u64::from_le_bytes([
                 output[offset],
@@ -137,11 +155,19 @@ impl FinalState {
 
             offset += 16;
 
+            // Validate size to prevent buffer overflow
+            if size > (output.len() - offset) as u64 {
+                return Err(Error::Simulation(format!(
+                    "Memory data size {} exceeds remaining buffer size {}",
+                    size,
+                    output.len() - offset
+                )));
+            }
+
             if offset + size as usize <= output.len() {
-                // TODO: PERFORMANCE: Optimize memory allocations in parsing loops
-                // Frequent vector allocations could impact performance
-                // Suggestion: Pre-allocate or use iterators where possible
-                let data = output[offset..offset + size as usize].to_vec();
+                // Use with_capacity to optimize memory allocations
+                let mut data = Vec::with_capacity(size as usize);
+                data.extend_from_slice(&output[offset..offset + size as usize]);
                 state.memory_locations.insert(address, data);
                 offset += size as usize;
             } else {

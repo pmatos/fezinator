@@ -117,10 +117,31 @@ impl Database {
             [],
         )?;
 
-        // TODO: DATABASE: Add indices for frequently queried columns
-        // Missing indices on extraction_id and analysis_id could impact query performance
-        // Recommendation: CREATE INDEX idx_simulations_extraction_id ON simulations(extraction_id)
-        // Recommendation: CREATE INDEX idx_simulations_analysis_id ON simulations(analysis_id)
+        // Create indices for frequently queried columns to improve performance
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_simulations_extraction_id ON simulations(extraction_id)",
+            [],
+        )?;
+
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_simulations_analysis_id ON simulations(analysis_id)",
+            [],
+        )?;
+
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_extractions_binary_id ON extractions(binary_id)",
+            [],
+        )?;
+
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_analyses_extraction_id ON analyses(extraction_id)",
+            [],
+        )?;
+
+        self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_binaries_hash ON binaries(hash)",
+            [],
+        )?;
 
         Ok(())
     }
@@ -327,5 +348,120 @@ impl Database {
 
         tx.commit()?;
         Ok(())
+    }
+
+    pub fn store_simulation_result(
+        &mut self,
+        extraction_id: i64,
+        result: &crate::simulator::SimulationResult,
+    ) -> Result<()> {
+        let tx = self.conn.transaction()?;
+
+        // Find the analysis_id for this extraction
+        let analysis_id: i64 = tx.query_row(
+            "SELECT id FROM analyses WHERE extraction_id = ?1",
+            params![extraction_id],
+            |row| row.get(0),
+        )?;
+
+        // Serialize state data
+        let initial_registers = serde_json::to_string(&result.initial_state.registers)?;
+        let initial_memory = serde_json::to_string(&result.initial_state.memory_locations)?;
+        let final_registers = serde_json::to_string(&result.final_state.registers)?;
+        let final_memory = serde_json::to_string(&result.final_state.memory_locations)?;
+
+        // Insert simulation result
+        tx.execute(
+            "INSERT INTO simulations (
+                extraction_id, analysis_id, simulation_id,
+                initial_registers, initial_memory,
+                final_registers, final_memory, final_flags,
+                execution_time_ns, exit_code, emulator_used,
+                assembly_file_path, binary_file_path
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            params![
+                extraction_id,
+                analysis_id,
+                result.simulation_id,
+                initial_registers,
+                initial_memory,
+                final_registers,
+                final_memory,
+                result.final_state.flags,
+                result.execution_time.as_nanos() as i64,
+                result.exit_code,
+                result.emulator_used,
+                result.assembly_file_path,
+                result.binary_file_path,
+            ],
+        )?;
+
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn load_block_analysis(
+        &self,
+        extraction_id: i64,
+    ) -> Result<Option<crate::analyzer::BlockAnalysis>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT instructions_count, live_in_registers, live_out_registers, 
+                    exit_points, memory_accesses
+             FROM analyses WHERE extraction_id = ?1",
+        )?;
+
+        let result = stmt.query_row(params![extraction_id], |row| {
+            let instructions_count: i64 = row.get(0)?;
+            let live_in_str: String = row.get(1)?;
+            let live_out_str: String = row.get(2)?;
+            let exit_points_json: String = row.get(3)?;
+            let memory_accesses_json: String = row.get(4)?;
+
+            Ok((
+                instructions_count,
+                live_in_str,
+                live_out_str,
+                exit_points_json,
+                memory_accesses_json,
+            ))
+        });
+
+        match result {
+            Ok((
+                instructions_count,
+                live_in_str,
+                live_out_str,
+                exit_points_json,
+                memory_accesses_json,
+            )) => {
+                let live_in_registers = live_in_str
+                    .split(',')
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string())
+                    .collect();
+
+                let live_out_registers = live_out_str
+                    .split(',')
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string())
+                    .collect();
+
+                let exit_points = serde_json::from_str(&exit_points_json)
+                    .map_err(|e| anyhow::anyhow!("Failed to parse exit points: {}", e))?;
+
+                let memory_accesses = serde_json::from_str(&memory_accesses_json)
+                    .map_err(|e| anyhow::anyhow!("Failed to parse memory accesses: {}", e))?;
+
+                Ok(Some(crate::analyzer::BlockAnalysis {
+                    instructions_count: instructions_count as usize,
+                    live_in_registers,
+                    live_out_registers,
+                    exit_points,
+                    memory_accesses,
+                }))
+            }
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
     }
 }
