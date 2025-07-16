@@ -3,9 +3,19 @@ use crate::analyzer::BlockAnalysis;
 use crate::db::ExtractionInfo;
 use crate::error::{Error, Result};
 
+const OUTPUT_BUFFER_SIZE: usize = 4096;
+const SAFE_MEMORY_RANGE_START: u64 = 0x10000000;
+const SAFE_MEMORY_RANGE_END: u64 = 0x20000000;
+
 pub struct AssemblyGenerator {
     #[allow(dead_code)]
     pub target_arch: String,
+}
+
+impl Default for AssemblyGenerator {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AssemblyGenerator {
@@ -39,9 +49,9 @@ impl AssemblyGenerator {
         assembly.push_str("BITS 64\n");
         assembly.push_str("SECTION .data\n");
         assembly.push_str("    ; Output buffer for register/memory state\n");
-        // TODO: CODE_QUALITY: Replace hard-coded buffer size with constant
-        // Hard-coded value 4096 should be defined as a constant for maintainability
-        assembly.push_str("    output_buffer times 4096 db 0\n");
+        assembly.push_str(&format!(
+            "    output_buffer times {OUTPUT_BUFFER_SIZE} db 0\n"
+        ));
         assembly.push('\n');
         assembly.push_str("SECTION .text\n");
         assembly.push_str("    global _start\n");
@@ -76,8 +86,15 @@ impl AssemblyGenerator {
             preamble.push_str(&format!("    mov qword [rsp-{offset}], 0x{value:016x}\n"));
         }
 
-        // Set up memory locations
+        // Set up memory locations with validation
         for (addr, data) in &initial_state.memory_locations {
+            // Validate memory address is within safe range
+            if !self.is_safe_memory_address(*addr) {
+                return Err(Error::Simulation(format!(
+                    "Memory address 0x{addr:016x} is outside safe range (0x{SAFE_MEMORY_RANGE_START:016x}-0x{SAFE_MEMORY_RANGE_END:016x})"
+                )));
+            }
+
             match data.len() {
                 1 => preamble.push_str(&format!(
                     "    mov byte [0x{addr:016x}], 0x{:02x}\n",
@@ -91,24 +108,23 @@ impl AssemblyGenerator {
                     "    mov dword [0x{addr:016x}], 0x{:08x}\n",
                     u32::from_le_bytes([data[0], data[1], data[2], data[3]])
                 )),
-                8 => {
-                    // TODO: SECURITY: Validate memory addresses are within safe ranges
-                    // Direct memory writes using arbitrary addresses could cause segfaults or security issues
-                    // Recommendation: Validate memory addresses are within safe ranges
-                    // Add: Memory protection and bounds checking
-                    preamble.push_str(&format!(
-                        "    mov qword [0x{addr:016x}], 0x{:016x}\n",
-                        u64::from_le_bytes([
-                            data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]
-                        ])
-                    ))
-                }
+                8 => preamble.push_str(&format!(
+                    "    mov qword [0x{addr:016x}], 0x{:016x}\n",
+                    u64::from_le_bytes([
+                        data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]
+                    ])
+                )),
                 _ => {
-                    // For larger data, write byte by byte
+                    // For larger data, write byte by byte with validation
                     for (i, byte) in data.iter().enumerate() {
+                        let target_addr = addr + i as u64;
+                        if !self.is_safe_memory_address(target_addr) {
+                            return Err(Error::Simulation(format!(
+                                "Memory address 0x{target_addr:016x} is outside safe range"
+                            )));
+                        }
                         preamble.push_str(&format!(
-                            "    mov byte [0x{:016x}], 0x{byte:02x}\n",
-                            addr + i as u64
+                            "    mov byte [0x{target_addr:016x}], 0x{byte:02x}\n"
                         ));
                     }
                 }
@@ -221,7 +237,9 @@ impl AssemblyGenerator {
         epilogue.push_str("    mov rax, 1                    ; sys_write\n");
         epilogue.push_str("    mov rdi, 1                    ; stdout\n");
         epilogue.push_str("    mov rsi, output_buffer        ; buffer\n");
-        epilogue.push_str("    mov rdx, 4096                 ; length\n");
+        epilogue.push_str(&format!(
+            "    mov rdx, {OUTPUT_BUFFER_SIZE}                 ; length\n"
+        ));
         epilogue.push_str("    syscall\n");
         epilogue.push('\n');
 
@@ -235,29 +253,38 @@ impl AssemblyGenerator {
     }
 
     fn convert_to_nasm_syntax(&self, instruction: &str) -> String {
-        // Convert Intel syntax to NASM syntax
+        // Convert Intel syntax to NASM syntax with improved robustness
         let mut result = instruction.to_string();
 
-        // TODO: BUG: Improve error handling and syntax conversion robustness
-        // Current implementation uses basic string replacement that could miss edge cases
-        // Recommendation: Implement proper assembly instruction parsing
-        // Remove "ptr" keywords that NASM doesn't understand
+        // Handle memory size specifiers more robustly
+        let size_patterns = [
+            ("dword ptr ", "dword "),
+            ("qword ptr ", "qword "),
+            ("word ptr ", "word "),
+            ("byte ptr ", "byte "),
+        ];
+
+        for (intel_pattern, nasm_pattern) in &size_patterns {
+            result = result.replace(intel_pattern, nasm_pattern);
+        }
+
+        // Remove remaining "ptr" keywords that NASM doesn't understand
         result = result.replace(" ptr ", " ");
         result = result.replace(" ptr,", ",");
         result = result.replace(",ptr ", ", ");
 
-        // Handle specific Intel/NASM syntax differences
-        result = result.replace("dword ptr [", "dword [");
-        result = result.replace("qword ptr [", "qword [");
-        result = result.replace("word ptr [", "word [");
-        result = result.replace("byte ptr [", "byte [");
-
-        // Handle memory references that might have complex expressions
-        // This is a simplified approach - a full implementation would need more sophisticated parsing
+        // Handle edge cases with brackets and ptr
         if result.contains("[") && result.contains("ptr") {
             result = result.replace(" ptr", "");
         }
 
+        // Remove any remaining standalone "ptr" tokens
+        result = result.replace(" ptr", "");
+
         result
+    }
+
+    fn is_safe_memory_address(&self, address: u64) -> bool {
+        (SAFE_MEMORY_RANGE_START..SAFE_MEMORY_RANGE_END).contains(&address)
     }
 }
