@@ -117,6 +117,11 @@ impl Database {
             [],
         )?;
 
+        // TODO: DATABASE: Add indices for frequently queried columns
+        // Missing indices on extraction_id and analysis_id could impact query performance
+        // Recommendation: CREATE INDEX idx_simulations_extraction_id ON simulations(extraction_id)
+        // Recommendation: CREATE INDEX idx_simulations_analysis_id ON simulations(analysis_id)
+
         Ok(())
     }
 
