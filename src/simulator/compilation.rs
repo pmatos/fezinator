@@ -25,6 +25,9 @@ impl CompilationPipeline {
         })?;
 
         // Create temporary directory
+        // TODO: SECURITY: Use more secure temporary file creation
+        // Current implementation creates temporary files in predictable locations
+        // Recommendation: Use more secure temporary file creation with proper permissions
         let temp_dir = tempfile::TempDir::new()
             .map_err(|e| Error::Simulation(format!("Failed to create temp directory: {e}")))?;
 
@@ -45,6 +48,8 @@ impl CompilationPipeline {
         let binary_file = self.temp_dir.path().join(binary_name);
 
         // Write assembly source to file
+        // TODO: PERFORMANCE: Add buffering for file I/O operations
+        // Multiple file operations without buffering could impact performance
         let mut file = fs::File::create(&asm_file)
             .map_err(|e| Error::Simulation(format!("Failed to create assembly file: {e}")))?;
         file.write_all(assembly_source.as_bytes())
@@ -93,6 +98,9 @@ impl CompilationPipeline {
     }
 
     fn find_executable(name: &str) -> Option<PathBuf> {
+        // TODO: BUG: Fix potential race condition in executable detection
+        // Current check-then-use pattern could lead to race conditions
+        // Recommendation: Consider using more robust executable detection
         std::env::var_os("PATH").and_then(|paths| {
             std::env::split_paths(&paths).find_map(|dir| {
                 let full_path = dir.join(name);

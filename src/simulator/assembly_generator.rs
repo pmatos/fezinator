@@ -39,6 +39,8 @@ impl AssemblyGenerator {
         assembly.push_str("BITS 64\n");
         assembly.push_str("SECTION .data\n");
         assembly.push_str("    ; Output buffer for register/memory state\n");
+        // TODO: CODE_QUALITY: Replace hard-coded buffer size with constant
+        // Hard-coded value 4096 should be defined as a constant for maintainability
         assembly.push_str("    output_buffer times 4096 db 0\n");
         assembly.push('\n');
         assembly.push_str("SECTION .text\n");
@@ -89,12 +91,18 @@ impl AssemblyGenerator {
                     "    mov dword [0x{addr:016x}], 0x{:08x}\n",
                     u32::from_le_bytes([data[0], data[1], data[2], data[3]])
                 )),
-                8 => preamble.push_str(&format!(
-                    "    mov qword [0x{addr:016x}], 0x{:016x}\n",
-                    u64::from_le_bytes([
-                        data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]
-                    ])
-                )),
+                8 => {
+                    // TODO: SECURITY: Validate memory addresses are within safe ranges
+                    // Direct memory writes using arbitrary addresses could cause segfaults or security issues
+                    // Recommendation: Validate memory addresses are within safe ranges
+                    // Add: Memory protection and bounds checking
+                    preamble.push_str(&format!(
+                        "    mov qword [0x{addr:016x}], 0x{:016x}\n",
+                        u64::from_le_bytes([
+                            data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]
+                        ])
+                    ))
+                }
                 _ => {
                     // For larger data, write byte by byte
                     for (i, byte) in data.iter().enumerate() {
@@ -230,6 +238,9 @@ impl AssemblyGenerator {
         // Convert Intel syntax to NASM syntax
         let mut result = instruction.to_string();
 
+        // TODO: BUG: Improve error handling and syntax conversion robustness
+        // Current implementation uses basic string replacement that could miss edge cases
+        // Recommendation: Implement proper assembly instruction parsing
         // Remove "ptr" keywords that NASM doesn't understand
         result = result.replace(" ptr ", " ");
         result = result.replace(" ptr,", ",");

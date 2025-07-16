@@ -58,6 +58,9 @@ impl FinalState {
     }
 
     pub fn parse_from_output(output: &[u8]) -> Result<Self> {
+        // TODO: BUG: Fix potential buffer overflow risk
+        // Current implementation assumes 4096-byte buffer but doesn't validate actual size properly
+        // Recommendation: Add proper buffer size validation and bounds checking
         if output.len() < 4096 {
             return Err(Error::Simulation("Output buffer too small".to_string()));
         }
@@ -135,6 +138,9 @@ impl FinalState {
             offset += 16;
 
             if offset + size as usize <= output.len() {
+                // TODO: PERFORMANCE: Optimize memory allocations in parsing loops
+                // Frequent vector allocations could impact performance
+                // Suggestion: Pre-allocate or use iterators where possible
                 let data = output[offset..offset + size as usize].to_vec();
                 state.memory_locations.insert(address, data);
                 offset += size as usize;
