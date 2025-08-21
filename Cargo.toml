@@ -11,7 +11,7 @@ path = "src/main.rs"
 clap = { version = "4.5", features = ["derive"] }
 object = { version = "0.37", features = ["pe"] }
 sha2 = "0.10"
-rusqlite = { version = "0.36", features = ["bundled"] }
+rusqlite = { version = "0.37", features = ["bundled"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 rand = "0.9"
@@ -19,10 +19,10 @@ env_logger = "0.11"
 log = "0.4"
 anyhow = "1.0"
 thiserror = "2.0"
-capstone = "0.12"
+capstone = "0.13"
 uuid = { version = "1.0", features = ["v4"] }
 tempfile = "3.10"
 
 [dev-dependencies]
 tempfile = "3.10"
-capstone = "0.12"
+capstone = "0.13"
