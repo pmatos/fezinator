@@ -10,6 +10,7 @@ mod simulator;
 
 use cli::analyze::AnalyzeCommand;
 use cli::extract::ExtractCommand;
+use cli::import::ImportCommand;
 use cli::list::ListCommand;
 use cli::remove::RemoveCommand;
 use cli::simulate::SimulateCommand;
@@ -25,6 +26,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     Extract(ExtractCommand),
+    Import(ImportCommand),
     List(ListCommand),
     Remove(RemoveCommand),
     Analyze(AnalyzeCommand),
@@ -39,6 +41,7 @@ fn main() -> Result<()> {
 
     match cli.command {
         Commands::Extract(cmd) => cmd.execute(),
+        Commands::Import(cmd) => cmd.execute(),
         Commands::List(cmd) => cmd.execute(),
         Commands::Remove(cmd) => cmd.execute(),
         Commands::Analyze(cmd) => cmd.execute(),
