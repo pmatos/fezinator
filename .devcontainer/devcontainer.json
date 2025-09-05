@@ -1,0 +1,42 @@
+{
+    "name": "Fezinator Development Environment",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "rust-lang.rust-analyzer",
+                "vadimcn.vscode-lldb",
+                "eamodio.gitlens",
+                "tamasfe.even-better-toml",
+                "serayuzgur.crates"
+            ],
+            "settings": {
+                "rust-analyzer.checkOnSave.command": "clippy",
+                "rust-analyzer.checkOnSave.extraArgs": ["--", "-D", "warnings"],
+                "rust-analyzer.cargo.features": "all",
+                "rust-analyzer.procMacro.enable": true,
+                "terminal.integrated.shell.linux": "/bin/bash",
+                "[rust]": {
+                    "editor.formatOnSave": true,
+                    "editor.defaultFormatter": "rust-lang.rust-analyzer"
+                },
+                "files.watcherExclude": {
+                    "**/target/**": true
+                }
+            }
+        }
+    },
+    "postCreateCommand": "bash -c 'source ~/.cargo/env && cargo build && ./scripts/install-hooks.sh || true'",
+    "remoteUser": "vscode",
+    "mounts": [
+        "source=${localWorkspaceFolder}/.devcontainer-cargo,target=/home/vscode/.cargo/registry,type=volume"
+    ],
+    "containerEnv": {
+        "RUST_BACKTRACE": "1"
+    },
+    "features": {
+        "ghcr.io/devcontainers/features/git:1": {}
+    }
+}
