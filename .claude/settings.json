@@ -23,7 +23,7 @@
       "Bash(python3:*)",
       "Bash(rm:target/*)",
       "Bash(sqlite3:*)",
-      "WebFetch(*)"
+      "WebFetch(domain:*)"
     ],
     "deny": [
       "Bash(git push --force:*)"
