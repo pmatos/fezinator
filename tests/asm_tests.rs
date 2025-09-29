@@ -509,6 +509,14 @@ fn find_asm_test_files() -> Vec<std::path::PathBuf> {
         for entry in entries.flatten() {
             if let Some(ext) = entry.path().extension() {
                 if ext == "asm" {
+                    // Skip FEX tests by default (they don't have annotations)
+                    // To test a specific FEX test, manually add annotations and
+                    // remove the fex_ prefix
+                    if let Some(filename) = entry.file_name().to_str() {
+                        if filename.starts_with("fex_") {
+                            continue;
+                        }
+                    }
                     files.push(entry.path());
                 }
             }
