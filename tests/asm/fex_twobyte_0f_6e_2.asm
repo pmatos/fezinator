@@ -1,0 +1,9 @@
+; BITS: 64
+; SOURCE: FEX TwoByte/0F_6E_2.asm
+; FEX_SHA256: d298bebbb8ec9f788064651aa62b3573d002d99641dd988ec0b936d94cb90358
+mov rax, 0x4142434445464748
+mov rbx, 0x5152535455565758
+
+movd mm0, eax
+movq mm1, rbx
+hlt
