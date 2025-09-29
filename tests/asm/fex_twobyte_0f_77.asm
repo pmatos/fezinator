@@ -1,6 +1,0 @@
-; BITS: 64
-; SOURCE: FEX TwoByte/0F_77.asm
-; FEX_SHA256: 5b904b7f247d888e9860450710906143d2412e5c6858a96cda0163101f078180
-emms ; Just ensure it runs
-
-hlt
