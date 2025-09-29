@@ -24,6 +24,39 @@ impl EmulatorConfig {
         }
     }
 
+    pub fn name_with_host_info(&self) -> String {
+        let emulator_name = self.name();
+        let host_arch = std::env::consts::ARCH;
+        let machine_id = Self::get_machine_id();
+        format!("{}@{}#{}", emulator_name, host_arch, machine_id)
+    }
+
+    fn get_machine_id() -> String {
+        // Try to get a unique machine identifier
+        // First try hostname, fallback to a hash of system info
+        if let Ok(hostname) = std::process::Command::new("hostname")
+            .output()
+            .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+        {
+            if !hostname.is_empty() {
+                return hostname;
+            }
+        }
+
+        // Fallback: use a hash of available system info
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut hasher = DefaultHasher::new();
+        std::env::consts::OS.hash(&mut hasher);
+        std::env::consts::ARCH.hash(&mut hasher);
+        if let Ok(user) = std::env::var("USER") {
+            user.hash(&mut hasher);
+        }
+
+        format!("host-{:x}", hasher.finish())
+    }
+
     pub fn qemu_x86_64() -> Self {
         Self::Qemu {
             binary: "qemu-x86_64".to_string(),

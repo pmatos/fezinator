@@ -8,7 +8,7 @@ use crate::analyzer::BlockAnalysis;
 #[cfg(test)]
 mod tests;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BinaryInfo {
     pub path: String,
     pub size: u64,
@@ -18,7 +18,7 @@ pub struct BinaryInfo {
     pub endianness: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ExtractionInfo {
     pub binary_path: String,
     pub binary_hash: String,
@@ -463,5 +463,156 @@ impl Database {
             Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
             Err(e) => Err(e.into()),
         }
+    }
+
+    pub fn get_binary_by_hash(&self, hash: &str) -> Result<BinaryInfo> {
+        let mut stmt = self.conn.prepare(
+            "SELECT path, size, hash, format, architecture, endianness
+             FROM binaries WHERE hash = ?1",
+        )?;
+
+        let binary_info = stmt.query_row(params![hash], |row| {
+            Ok(BinaryInfo {
+                path: row.get(0)?,
+                size: row.get(1)?,
+                hash: row.get(2)?,
+                format: row.get(3)?,
+                architecture: row.get(4)?,
+                endianness: row.get(5)?,
+            })
+        })?;
+
+        Ok(binary_info)
+    }
+
+    pub fn get_simulations_for_extraction(
+        &self,
+        extraction_id: i64,
+    ) -> Result<Vec<crate::simulator::SimulationResult>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT simulation_id, initial_registers, initial_memory,
+                    final_registers, final_memory, final_flags,
+                    execution_time_ns, exit_code, emulator_used,
+                    assembly_file_path, binary_file_path
+             FROM simulations WHERE extraction_id = ?1",
+        )?;
+
+        let simulation_iter = stmt.query_map(params![extraction_id], |row| {
+            let simulation_id: String = row.get(0)?;
+            let initial_registers_json: String = row.get(1)?;
+            let initial_memory_json: String = row.get(2)?;
+            let final_registers_json: String = row.get(3)?;
+            let final_memory_json: String = row.get(4)?;
+            let final_flags: u64 = row.get(5)?;
+            let execution_time_ns: i64 = row.get(6)?;
+            let exit_code: i32 = row.get(7)?;
+            let emulator_used: Option<String> = row.get(8)?;
+            let assembly_file_path: Option<String> = row.get(9)?;
+            let binary_file_path: Option<String> = row.get(10)?;
+
+            Ok((
+                simulation_id,
+                initial_registers_json,
+                initial_memory_json,
+                final_registers_json,
+                final_memory_json,
+                final_flags,
+                execution_time_ns,
+                exit_code,
+                emulator_used,
+                assembly_file_path,
+                binary_file_path,
+            ))
+        })?;
+
+        let mut simulations = Vec::new();
+        for simulation_result in simulation_iter {
+            let (
+                simulation_id,
+                initial_registers_json,
+                initial_memory_json,
+                final_registers_json,
+                final_memory_json,
+                final_flags,
+                execution_time_ns,
+                exit_code,
+                emulator_used,
+                assembly_file_path,
+                binary_file_path,
+            ) = simulation_result?;
+
+            let initial_registers =
+                serde_json::from_str(&initial_registers_json).map_err(|_e| {
+                    rusqlite::Error::InvalidColumnType(
+                        0,
+                        "initial_registers".to_string(),
+                        rusqlite::types::Type::Text,
+                    )
+                })?;
+            let initial_memory = serde_json::from_str(&initial_memory_json).map_err(|_e| {
+                rusqlite::Error::InvalidColumnType(
+                    0,
+                    "initial_memory".to_string(),
+                    rusqlite::types::Type::Text,
+                )
+            })?;
+            let final_registers = serde_json::from_str(&final_registers_json).map_err(|_e| {
+                rusqlite::Error::InvalidColumnType(
+                    0,
+                    "final_registers".to_string(),
+                    rusqlite::types::Type::Text,
+                )
+            })?;
+            let final_memory = serde_json::from_str(&final_memory_json).map_err(|_e| {
+                rusqlite::Error::InvalidColumnType(
+                    0,
+                    "final_memory".to_string(),
+                    rusqlite::types::Type::Text,
+                )
+            })?;
+
+            let initial_state = crate::simulator::InitialState {
+                registers: initial_registers,
+                memory_locations: initial_memory,
+                stack_setup: Vec::new(), // Not stored in DB for now
+            };
+
+            let final_state = crate::simulator::FinalState {
+                registers: final_registers,
+                memory_locations: final_memory,
+                flags: final_flags,
+            };
+
+            let simulation = crate::simulator::SimulationResult {
+                simulation_id,
+                initial_state,
+                final_state,
+                execution_time: std::time::Duration::from_nanos(execution_time_ns as u64),
+                exit_code,
+                emulator_used,
+                assembly_file_path,
+                binary_file_path,
+            };
+
+            simulations.push(simulation);
+        }
+
+        Ok(simulations)
+    }
+
+    pub fn store_binary_info(&mut self, binary_info: &BinaryInfo) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR IGNORE INTO binaries (path, size, hash, format, architecture, endianness)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                binary_info.path,
+                binary_info.size,
+                binary_info.hash,
+                binary_info.format,
+                binary_info.architecture,
+                binary_info.endianness,
+            ],
+        )?;
+        Ok(())
     }
 }

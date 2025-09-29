@@ -1,6 +1,9 @@
 pub mod analyze;
+pub mod compare;
+pub mod export;
 pub mod extract;
 pub mod import;
+pub mod import_results;
 pub mod list;
 pub mod remove;
 pub mod simulate;

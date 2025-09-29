@@ -174,6 +174,132 @@ Fezinator is structured as a modular Rust application:
 - **Database Module**: SQLite operations using `rusqlite`
 - **Error Module**: Comprehensive error handling with `thiserror`
 
+## Cross-Platform Testing
+
+Fezinator supports cross-platform testing to compare native execution on Intel/AMD64 with emulated execution on ARM64 using FEX-Emu. This enables testing and validation of x86/x86_64 assembly blocks across different host architectures.
+
+### Export/Import Workflow
+
+The export/import system allows you to share simulation results between different machines:
+
+#### 1. Extract and Simulate on Intel Machine
+
+```bash
+# Extract assembly blocks from binaries
+fezinator extract /path/to/binary
+
+# Analyze the extracted blocks
+fezinator analyze 1
+
+# Run simulations natively on Intel
+fezinator simulate 1 --emulator native
+
+# Export results for cross-platform comparison
+fezinator export --block 1 --output block1_intel.json
+```
+
+#### 2. Transfer and Import on ARM64 Machine
+
+```bash
+# Transfer the JSON file to ARM64 machine
+scp block1_intel.json arm64-host:~/
+
+# On ARM64 machine, import the results
+fezinator import-results block1_intel.json
+
+# Run simulations with FEX-Emu
+fezinator simulate 1 --emulator fex-emu
+
+# Compare native Intel vs FEX-Emu results
+fezinator compare 1 --emulators native,fex-emu --detailed-registers
+```
+
+### Available Commands
+
+#### Export Command
+
+Export simulation data to JSON format for cross-platform sharing:
+
+```bash
+# Export a specific block
+fezinator export --block 1 --output results.json
+
+# Export all blocks
+fezinator export --output full_database.json
+
+# Export only blocks with simulations
+fezinator export --simulated-only --output simulated_blocks.json
+```
+
+#### Import Results Command
+
+Import simulation data from another machine:
+
+```bash
+# Import all data from JSON
+fezinator import-results results.json
+
+# Import only simulations (skip binaries/extractions)
+fezinator import-results --simulations-only results.json
+
+# Skip importing simulations for blocks that already have them
+fezinator import-results --skip-existing-simulations results.json
+
+# Dry run to see what would be imported
+fezinator import-results --dry-run results.json
+```
+
+#### Compare Command
+
+Compare simulation results across different emulators:
+
+```bash
+# Basic comparison
+fezinator compare 1
+
+# Filter by specific emulators
+fezinator compare 1 --emulators native,fex-emu
+
+# Show detailed register differences
+fezinator compare 1 --detailed-registers --detailed-memory
+
+# Export comparison to JSON
+fezinator compare 1 --export-json comparison_report.json
+```
+
+### Host Information Tracking
+
+Fezinator automatically tracks host information in simulation results:
+
+- **Host Architecture**: x86_64, aarch64, etc.
+- **Machine ID**: Hostname or generated identifier
+- **Emulator Used**: native@x86_64#intel-dev-001, fex-emu@aarch64#arm-server-001
+
+This enables precise identification of where each simulation was performed.
+
+### Example Workflow
+
+```bash
+# Intel machine workflow
+fezinator extract /bin/ls
+fezinator analyze 1
+fezinator simulate 1 --emulator native
+fezinator export --block 1 --output ls_intel.json
+
+# ARM64 machine workflow
+fezinator import-results ls_intel.json
+fezinator simulate 1 --emulator fex-emu
+fezinator compare 1 --emulators native,fex-emu
+
+# Output shows:
+# ✓ Exit codes match: ✓
+# ✓ Flags match: ✓
+# ✓ Registers match: ✗ (3 differences)
+# ✓ Overall consensus: ✗ FAIL
+```
+
+This workflow enables systematic testing of FEX-Emu compatibility and performance against native execution.
+
 ## Contributing
 
 1. Read [BUILDING.md](BUILDING.md) for development setup
