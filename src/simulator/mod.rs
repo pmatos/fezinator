@@ -121,7 +121,10 @@ impl Simulator {
             final_state,
             execution_result.execution_time,
             execution_result.exit_code,
-            emulator.map(|e| e.name()),
+            Some(emulator.map_or_else(
+                || EmulatorConfig::Native.name_with_host_info(),
+                |e| e.name_with_host_info(),
+            )),
             assembly_file_path,
             binary_file_path,
         ))
