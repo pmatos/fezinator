@@ -1,0 +1,38 @@
+; BITS: 64
+; SOURCE: FEX Primary/Primary_B8_3.asm
+; FEX_SHA256: 0a75f6bb2ad1e6e4e629f22091e6af944c03acf4b94636cc7799f1d8de8437cb
+mov rax, -1
+mov rbx, -1
+mov rcx, -1
+mov rdx, -1
+mov rbp, -1
+mov rsi, -1
+mov rdi, -1
+mov rsp, -1
+mov r8, -1
+mov r9, -1
+mov r10, -1
+mov r11, -1
+mov r12, -1
+mov r13, -1
+mov r14, -1
+mov r15, -1
+
+mov rax, 0x4847464544434241
+mov rbx, 0x4847464544434241
+mov rcx, 0x4847464544434241
+mov rdx, 0x4847464544434241
+mov rbp, 0x4847464544434241
+mov rsi, 0x4847464544434241
+mov rdi, 0x4847464544434241
+mov rsp, 0x4847464544434241
+mov r8, 0x4847464544434241
+mov r9, 0x4847464544434241
+mov r10, 0x4847464544434241
+mov r11, 0x4847464544434241
+mov r12, 0x4847464544434241
+mov r13, 0x4847464544434241
+mov r14, 0x4847464544434241
+mov r15, 0x4847464544434241
+
+hlt
