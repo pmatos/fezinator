@@ -39,30 +39,43 @@ command_exists() {
 # Check if cargo tools are installed
 check_tools() {
     local missing_tools=()
-    
+
     if ! command_exists cargo-audit; then
         missing_tools+=("cargo-audit")
     fi
-    
+
     if ! command_exists cargo-machete; then
         missing_tools+=("cargo-machete")
     fi
-    
+
     if ! command_exists cargo-outdated; then
         missing_tools+=("cargo-outdated")
     fi
-    
+
     if ! command_exists cargo-geiger; then
         missing_tools+=("cargo-geiger")
     fi
-    
+
     if [ ${#missing_tools[@]} -ne 0 ]; then
         print_warning "Missing tools: ${missing_tools[*]}"
         print_status "Installing missing tools..."
-        for tool in "${missing_tools[@]}"; do
-            print_status "Installing $tool..."
-            cargo install "$tool" || print_error "Failed to install $tool"
-        done
+
+        # Try cargo-binstall first for faster installation
+        if command_exists cargo-binstall; then
+            for tool in "${missing_tools[@]}"; do
+                print_status "Installing $tool with cargo-binstall..."
+                cargo binstall --no-confirm "$tool" || {
+                    print_warning "Failed to binstall $tool, falling back to cargo install..."
+                    cargo install "$tool" || print_error "Failed to install $tool"
+                }
+            done
+        else
+            # Fallback to cargo install
+            for tool in "${missing_tools[@]}"; do
+                print_status "Installing $tool..."
+                cargo install "$tool" || print_error "Failed to install $tool"
+            done
+        fi
     fi
 }
 
