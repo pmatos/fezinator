@@ -1,5 +1,5 @@
 {
-  "enableAllProjectMcpServers": true,
+  "includeCoAuthoredBy": false,
   "permissions": {
     "allow": [
       "Bash(./scripts/qa.sh:*)",
@@ -25,8 +25,12 @@
       "Bash(sqlite3:*)",
       "WebFetch(domain:*)"
     ],
-    "deny": [
-      "Bash(git push --force:*)"
-    ]
+    "defaultMode": "plan"
+  },
+  "enableAllProjectMcpServers": true,
+  "model": "claude-sonnet-4-5",
+  "env": {
+    "BASH_DEFAULT_TIMEOUT_MS": "1800000",
+    "BASH_MAX_TIMEOUT_MS": "7200000"
   }
 }
