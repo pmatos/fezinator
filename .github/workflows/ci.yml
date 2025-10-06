@@ -64,6 +64,7 @@ jobs:
       uses: Swatinem/rust-cache@v2
       with:
         shared-key: "coverage"
+        cache-all-crates: true
         save-if: ${{ github.ref == 'refs/heads/main' }}
 
     - name: Install cargo-binstall
