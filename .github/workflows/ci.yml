@@ -28,16 +28,14 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y libcapstone-dev nasm
 
-    - name: Cache cargo registry
-      uses: actions/cache@v4
+    - name: Setup Rust cache
+      uses: Swatinem/rust-cache@v2
       with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-
+        shared-key: "qa"
+        cache-all-crates: true
+
+    - name: Install cargo-binstall
+      uses: cargo-bins/cargo-binstall@main
 
     - name: Make QA script executable
       run: chmod +x scripts/qa.sh
@@ -48,7 +46,7 @@ jobs:
   test-coverage:
     name: Test Coverage
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v5
@@ -61,8 +59,17 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y libcapstone-dev nasm
 
+    - name: Setup Rust cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        shared-key: "coverage"
+        cache-all-crates: true
+
+    - name: Install cargo-binstall
+      uses: cargo-bins/cargo-binstall@main
+
     - name: Install cargo-tarpaulin
-      run: cargo install cargo-tarpaulin
+      run: cargo binstall --no-confirm cargo-tarpaulin
 
     - name: Generate coverage report
       run: cargo tarpaulin --verbose --all-features --workspace --timeout 120 --out xml
