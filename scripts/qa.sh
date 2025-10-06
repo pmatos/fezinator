@@ -66,14 +66,20 @@ check_tools() {
                 print_status "Installing $tool with cargo-binstall..."
                 cargo binstall --no-confirm "$tool" || {
                     print_warning "Failed to binstall $tool, falling back to cargo install..."
-                    cargo install "$tool" || print_error "Failed to install $tool"
+                    cargo install "$tool" || {
+                        print_error "Failed to install $tool"
+                        return 1
+                    }
                 }
             done
         else
             # Fallback to cargo install
             for tool in "${missing_tools[@]}"; do
                 print_status "Installing $tool..."
-                cargo install "$tool" || print_error "Failed to install $tool"
+                cargo install "$tool" || {
+                    print_error "Failed to install $tool"
+                    return 1
+                }
             done
         fi
     fi
@@ -101,9 +107,12 @@ main() {
     echo "🔍 Fezinator Quality Assurance"
     echo "==============================="
     echo
-    
+
     # Check and install tools
-    check_tools
+    if ! check_tools; then
+        print_error "Failed to install required tools"
+        exit 1
+    fi
     echo
     
     local failed_checks=()
