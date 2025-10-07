@@ -33,7 +33,7 @@ jobs:
       with:
         shared-key: "qa"
         cache-all-crates: true
-        prefix-key: "v1"
+        prefix-key: "v2"
         save-if: ${{ github.ref == 'refs/heads/main' }}
 
     - name: Install cargo-binstall
@@ -66,7 +66,7 @@ jobs:
       with:
         shared-key: "coverage"
         cache-all-crates: true
-        prefix-key: "v1"
+        prefix-key: "v2"
         save-if: ${{ github.ref == 'refs/heads/main' }}
 
     - name: Install cargo-binstall
