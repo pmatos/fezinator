@@ -64,7 +64,7 @@ check_tools() {
         if command_exists cargo-binstall; then
             for tool in "${missing_tools[@]}"; do
                 print_status "Installing $tool with cargo-binstall..."
-                cargo binstall --no-confirm --force "$tool" || {
+                cargo binstall --no-confirm "$tool" || {
                     print_warning "Failed to binstall $tool, falling back to cargo install..."
                     cargo install "$tool" || {
                         print_error "Failed to install $tool"
