@@ -9,6 +9,8 @@ use std::path::PathBuf;
 use crate::db::BinaryInfo;
 use crate::error::FezinatorError;
 
+const MIN_BLOCK_SIZE: usize = 16;
+
 #[cfg(test)]
 mod tests;
 
@@ -225,17 +227,47 @@ impl Extractor {
             0
         };
 
-        let end_idx = start_idx + instruction_count;
+        let mut end_idx = start_idx + instruction_count;
 
-        // Get the address range
+        // Get the address range and ensure minimum block size
         let start_addr = insns[start_idx].address();
-        let end_addr = if end_idx < insns.len() {
+
+        // Calculate initial block size and extend if needed to meet MIN_BLOCK_SIZE
+        loop {
+            let tentative_end_addr = if end_idx < insns.len() {
+                insns[end_idx].address()
+            } else {
+                let last_insn = &insns[insns.len() - 1];
+                last_insn.address() + last_insn.bytes().len() as u64
+            };
+
+            let block_size = (tentative_end_addr - start_addr) as usize;
+
+            // If block is large enough or we can't extend further, break
+            if block_size >= MIN_BLOCK_SIZE || end_idx >= insns.len() {
+                break;
+            }
+
+            // Extend by one more instruction
+            end_idx += 1;
+        }
+
+        // Final validation: ensure we have at least MIN_BLOCK_SIZE
+        let final_end_addr = if end_idx < insns.len() {
             insns[end_idx].address()
         } else {
-            // If we're at the end, use the last instruction's end address
             let last_insn = &insns[insns.len() - 1];
             last_insn.address() + last_insn.bytes().len() as u64
         };
+
+        if (final_end_addr - start_addr) < MIN_BLOCK_SIZE as u64 {
+            return Err(FezinatorError::InvalidBinary(format!(
+                "Cannot extract block of at least {MIN_BLOCK_SIZE} bytes from section"
+            ))
+            .into());
+        }
+
+        let end_addr = final_end_addr;
 
         // Extract the bytes from the section data
         let start_offset = (start_addr - section_addr) as usize;
